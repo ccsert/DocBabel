@@ -1,0 +1,38 @@
+[project]
+name = "babeldoc-web"
+version = "0.1.0"
+description = "BabelDOC Web - 基于 BabelDOC 核心引擎的 Web 翻译平台"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "sqlalchemy[asyncio]>=2.0.30",
+    "asyncpg>=0.30.0",
+    "alembic>=1.13.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "python-multipart>=0.0.9",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.5.0",
+    "aiofiles>=24.1.0",
+    "email-validator>=2.0.0",
+    "babeldoc",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.27.0",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.27.0",
+]
+
+[tool.uv.sources]
+babeldoc = { path = "../../", editable = true }
