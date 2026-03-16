@@ -206,7 +206,7 @@ def _do_translation(
     # Build translator
     model_name = settings.DEFAULT_MODEL
     base_url = None
-    api_key = os.environ.get("OPENAI_API_KEY", "")
+    api_key = settings.OPENAI_API_KEY
     translator_extra_body = {}
     send_temperature = True
     reasoning = None

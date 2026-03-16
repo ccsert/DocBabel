@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     # Default translation settings
     DEFAULT_QPS: int = 4
     DEFAULT_MODEL: str = "gpt-4o-mini"
+    OPENAI_API_KEY: str = ""
 
     class Config:
         env_file = ".env"

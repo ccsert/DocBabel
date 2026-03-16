@@ -11,7 +11,7 @@ import alembic.op as op
 
 
 revision: str = "20260316_0001"
-down_revision: str | None = None
+down_revision: str | None = "20260315_0000"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

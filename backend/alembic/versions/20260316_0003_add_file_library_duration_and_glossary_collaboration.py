@@ -41,6 +41,7 @@ def upgrade() -> None:
             "approved",
             "rejected",
             name="glossarycontributionstatus",
+            create_type=False,
         )
         status_enum.create(bind, checkfirst=True)
         op.create_table(
