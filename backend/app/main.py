@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import init_db
 from app.services.queue import translation_queue
-from app.api import auth, tasks, glossaries, models, admin
+from app.api import auth, tasks, glossaries, models, admin, files
 
 
 @asynccontextmanager
@@ -39,6 +39,7 @@ app.add_middleware(
 # Register routers
 app.include_router(auth.router, prefix="/api")
 app.include_router(tasks.router, prefix="/api")
+app.include_router(files.router, prefix="/api")
 app.include_router(glossaries.router, prefix="/api")
 app.include_router(models.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")

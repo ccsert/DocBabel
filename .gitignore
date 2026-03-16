@@ -32,8 +32,8 @@ uv.lock
 *.local
 
 # Backend
-backend/uploads/
-backend/outputs/
+backend/app/uploads/
+backend/app/outputs/
 
 # Frontend
 frontend/node_modules/

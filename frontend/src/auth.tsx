@@ -1,43 +1,41 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { authApi } from './api';
-
-interface User {
-  id: number;
-  username: string;
-  email: string;
-  role: string;
-  is_active: boolean;
-}
-
-interface AuthContextType {
-  user: User | null;
-  token: string | null;
-  login: (username: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
-  isAdmin: boolean;
-  loading: boolean;
-}
-
-const AuthContext = createContext<AuthContextType>(null!);
+import { AuthContext, type User } from './auth-context';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const initialToken = localStorage.getItem('token');
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
-  const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState<string | null>(initialToken);
+  const [loading, setLoading] = useState(Boolean(initialToken));
 
   useEffect(() => {
-    if (token) {
-      authApi.me()
-        .then((res) => setUser(res.data))
-        .catch(() => {
+    if (!token) {
+      return;
+    }
+
+    let cancelled = false;
+
+    authApi.me()
+      .then((res) => {
+        if (!cancelled) {
+          setUser(res.data);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
           setToken(null);
           localStorage.removeItem('token');
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   const login = async (username: string, password: string) => {
@@ -65,5 +63,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     </AuthContext.Provider>
   );
 }
-
-export const useAuth = () => useContext(AuthContext);

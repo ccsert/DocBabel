@@ -1,10 +1,12 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './auth';
+import { AuthProvider } from './auth';
 import Layout from './components/Layout';
+import { useAuth } from './use-auth';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import TranslatePage from './pages/TranslatePage';
 import TasksPage from './pages/TasksPage';
+import FilesPage from './pages/FilesPage';
 import GlossariesPage from './pages/GlossariesPage';
 import ModelsPage from './pages/ModelsPage';
 import AdminPage from './pages/AdminPage';
@@ -37,6 +39,7 @@ export default function App() {
           >
             <Route path="/" element={<TranslatePage />} />
             <Route path="/tasks" element={<TasksPage />} />
+            <Route path="/files" element={<FilesPage />} />
             <Route path="/glossaries" element={<GlossariesPage />} />
             <Route path="/models" element={<ModelsPage />} />
             <Route

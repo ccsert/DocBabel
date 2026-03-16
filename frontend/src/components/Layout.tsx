@@ -1,8 +1,8 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { useAuth } from '../auth';
 import {
   FileText,
   Upload,
+  Archive,
   BookOpen,
   Cpu,
   Shield,
@@ -11,9 +11,11 @@ import {
   X,
 } from 'lucide-react';
 import { useState } from 'react';
+import { useAuth } from '../use-auth';
 
 const navItems = [
   { to: '/', icon: Upload, label: '翻译' },
+  { to: '/files', icon: Archive, label: '文件库' },
   { to: '/tasks', icon: FileText, label: '任务' },
   { to: '/glossaries', icon: BookOpen, label: '术语表' },
   { to: '/models', icon: Cpu, label: '模型' },

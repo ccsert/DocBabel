@@ -33,6 +33,12 @@ class TaskStatus(str, enum.Enum):
     cancelled = "cancelled"
 
 
+class GlossaryContributionStatus(str, enum.Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
 # ─── User ────────────────────────────────────────────────
 
 class User(Base):
@@ -64,6 +70,8 @@ class TranslationTask(Base):
     # file info
     original_filename: Mapped[str] = mapped_column(String(512), nullable=False)
     stored_filename: Mapped[str] = mapped_column(String(512), nullable=False)
+    file_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    model_config_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     output_mono_filename: Mapped[str | None] = mapped_column(String(512), nullable=True)
     output_dual_filename: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
@@ -84,11 +92,16 @@ class TranslationTask(Base):
     skip_translation: Mapped[bool] = mapped_column(Boolean, default=False)
     custom_system_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # auto glossary extraction
+    auto_extract_glossary: Mapped[bool] = mapped_column(Boolean, default=False)
+    extracted_glossary_data: Mapped[list | None] = mapped_column(JSON, nullable=True)
+
     # progress & timing
     progress: Mapped[float] = mapped_column(Float, default=0.0)
     progress_message: Mapped[str | None] = mapped_column(String(512), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     token_usage: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -111,12 +124,14 @@ class GlossarySet(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_collaborative: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # relationships
     user: Mapped["User"] = relationship(back_populates="glossaries")
     entries: Mapped[list["GlossaryEntry"]] = relationship(back_populates="glossary_set", cascade="all, delete-orphan")
+    contributions: Mapped[list["GlossaryContribution"]] = relationship(back_populates="glossary_set", cascade="all, delete-orphan")
 
 
 class GlossaryEntry(Base):
@@ -130,6 +145,31 @@ class GlossaryEntry(Base):
 
     # relationships
     glossary_set: Mapped["GlossarySet"] = relationship(back_populates="entries")
+
+
+class GlossaryContribution(Base):
+    __tablename__ = "glossary_contributions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    glossary_set_id: Mapped[int] = mapped_column(ForeignKey("glossary_sets.id", ondelete="CASCADE"), nullable=False, index=True)
+    proposer_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    source: Mapped[str] = mapped_column(String(512), nullable=False)
+    target: Mapped[str] = mapped_column(String(512), nullable=False)
+    target_language: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    status: Mapped[GlossaryContributionStatus] = mapped_column(
+        Enum(GlossaryContributionStatus),
+        default=GlossaryContributionStatus.pending,
+        nullable=False,
+        index=True,
+    )
+    reviewer_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    glossary_set: Mapped["GlossarySet"] = relationship(back_populates="contributions")
+    proposer: Mapped["User"] = relationship(foreign_keys=[proposer_user_id])
+    reviewer: Mapped["User | None"] = relationship(foreign_keys=[reviewer_user_id])
 
 
 # ─── Custom Model ────────────────────────────────────────

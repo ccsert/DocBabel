@@ -41,27 +41,50 @@ export const tasksApi = {
     api.post('/tasks', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
-  list: (params?: { status?: string; page?: number; page_size?: number }) =>
+  list: (params?: { status?: string; q?: string; start_date?: string; end_date?: string; page?: number; page_size?: number }) =>
     api.get('/tasks', { params }),
   get: (id: number) => api.get(`/tasks/${id}`),
   cancel: (id: number) => api.post(`/tasks/${id}/cancel`),
+  delete: (id: number) => api.delete(`/tasks/${id}`),
   downloadUrl: (id: number, fileType: 'mono' | 'dual') =>
     `/api/tasks/${id}/download/${fileType}`,
+  saveGlossary: (id: number, name: string, description?: string) =>
+    api.post(`/tasks/${id}/save-glossary`, { name, description }),
+};
+
+export const filesApi = {
+  list: (params?: { q?: string; start_date?: string; end_date?: string }) =>
+    api.get('/files', { params }),
 };
 
 // ─── Glossaries ──────────────────────────────────────────
 export const glossariesApi = {
   list: () => api.get('/glossaries'),
-  create: (data: { name: string; description?: string; entries?: Array<{ source: string; target: string; target_language?: string }> }) =>
+  create: (data: { name: string; description?: string; is_collaborative?: boolean; entries?: Array<{ source: string; target: string; target_language?: string }> }) =>
     api.post('/glossaries', data),
   get: (id: number) => api.get(`/glossaries/${id}`),
-  update: (id: number, data: { name?: string; description?: string }) =>
+  update: (id: number, data: { name?: string; description?: string; is_collaborative?: boolean }) =>
     api.patch(`/glossaries/${id}`, data),
   delete: (id: number) => api.delete(`/glossaries/${id}`),
   addEntry: (glossaryId: number, data: { source: string; target: string; target_language?: string }) =>
     api.post(`/glossaries/${glossaryId}/entries`, data),
+  updateEntry: (glossaryId: number, entryId: number, data: { source?: string; target?: string; target_language?: string | null }) =>
+    api.patch(`/glossaries/${glossaryId}/entries/${entryId}`, data),
+  contribute: (glossaryId: number, data: { source: string; target: string; target_language?: string }) =>
+    api.post(`/glossaries/${glossaryId}/contributions`, data),
+  approveContribution: (glossaryId: number, contributionId: number, review_note?: string) =>
+    api.post(`/glossaries/${glossaryId}/contributions/${contributionId}/approve`, { review_note }),
+  rejectContribution: (glossaryId: number, contributionId: number, review_note?: string) =>
+    api.post(`/glossaries/${glossaryId}/contributions/${contributionId}/reject`, { review_note }),
   deleteEntry: (glossaryId: number, entryId: number) =>
     api.delete(`/glossaries/${glossaryId}/entries/${entryId}`),
+  importFile: (glossaryId: number, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post(`/glossaries/${glossaryId}/import`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 // ─── Models ──────────────────────────────────────────────
@@ -84,6 +107,8 @@ export const modelsApi = {
   get: (id: number) => api.get(`/models/${id}`),
   update: (id: number, data: Partial<ModelData>) => api.patch(`/models/${id}`, data),
   delete: (id: number) => api.delete(`/models/${id}`),
+  test: (data: Partial<ModelData>) => api.post('/models/test', data),
+  testExisting: (id: number) => api.post(`/models/${id}/test`),
 };
 
 // ─── Admin ───────────────────────────────────────────────

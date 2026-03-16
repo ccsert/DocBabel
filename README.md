@@ -35,6 +35,9 @@ cd backend
 # 使用 uv 安装依赖（自动创建虚拟环境）
 uv sync
 
+# 执行数据库迁移（首次和后续升级都需要）
+uv run alembic upgrade head
+
 # 配置环境变量
 cp .env.example .env
 # 编辑 .env 文件，设置密钥等
@@ -121,6 +124,7 @@ web/
 - `GET /api/tasks/{id}` - 获取任务详情
 - `POST /api/tasks/{id}/cancel` - 取消任务
 - `GET /api/tasks/{id}/download/{mono|dual}` - 下载翻译结果
+- `POST /api/tasks/{id}/save-glossary` - 将自动提取术语保存为术语表
 
 ### 术语表
 - `GET /api/glossaries` - 术语表列表

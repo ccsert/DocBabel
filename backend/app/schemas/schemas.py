@@ -55,6 +55,9 @@ class TaskCreate(BaseModel):
     ocr_workaround: bool = False
     skip_translation: bool = False
     custom_system_prompt: str | None = None
+    auto_extract_glossary: bool = False
+    reuse_existing: bool = False
+    force_regenerate: bool = False
 
 
 class TaskOut(BaseModel):
@@ -79,7 +82,12 @@ class TaskOut(BaseModel):
     progress_message: str | None
     error_message: str | None
     token_usage: dict | None
+    duration_seconds: float | None
     queue_position: int | None
+    output_mono_filename: str | None
+    output_dual_filename: str | None
+    auto_extract_glossary: bool
+    extracted_glossary_data: list | None
     created_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
@@ -92,11 +100,34 @@ class TaskListOut(BaseModel):
     total: int
 
 
+class FileLibraryItemOut(BaseModel):
+    file_hash: str
+    original_filename: str
+    latest_task_id: int
+    latest_created_at: datetime
+    latest_completed_at: datetime | None
+    latest_duration_seconds: float | None
+    task_count: int
+    output_mono_filename: str | None
+    output_dual_filename: str | None
+
+
+class FileLibraryListOut(BaseModel):
+    files: list[FileLibraryItemOut]
+    total: int
+
+
 # ─── Glossary ────────────────────────────────────────────
 
 class GlossaryEntryIn(BaseModel):
     source: str
     target: str
+    target_language: str | None = None
+
+
+class GlossaryEntryUpdate(BaseModel):
+    source: str | None = None
+    target: str | None = None
     target_language: str | None = None
 
 
@@ -109,15 +140,42 @@ class GlossaryEntryOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class GlossaryContributionIn(BaseModel):
+    source: str
+    target: str
+    target_language: str | None = None
+
+
+class GlossaryContributionReviewIn(BaseModel):
+    review_note: str | None = None
+
+
+class GlossaryContributionOut(BaseModel):
+    id: int
+    glossary_set_id: int
+    proposer_user_id: int
+    source: str
+    target: str
+    target_language: str | None
+    status: str
+    review_note: str | None
+    created_at: datetime
+    reviewed_at: datetime | None
+
+    model_config = {"from_attributes": True}
+
+
 class GlossarySetCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     description: str | None = None
+    is_collaborative: bool = False
     entries: list[GlossaryEntryIn] = []
 
 
 class GlossarySetUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
+    is_collaborative: bool | None = None
 
 
 class GlossarySetOut(BaseModel):
@@ -125,9 +183,12 @@ class GlossarySetOut(BaseModel):
     user_id: int
     name: str
     description: str | None
+    is_collaborative: bool
+    is_owner: bool = False
     created_at: datetime
     updated_at: datetime
     entries: list[GlossaryEntryOut] = []
+    pending_contributions: list[GlossaryContributionOut] = []
 
     model_config = {"from_attributes": True}
 

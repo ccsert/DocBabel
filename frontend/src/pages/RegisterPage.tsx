@@ -1,7 +1,15 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../auth';
+import { useAuth } from '../use-auth';
 import { FileText } from 'lucide-react';
+
+interface ApiErrorLike {
+  response?: {
+    data?: {
+      detail?: string;
+    };
+  };
+}
 
 export default function RegisterPage() {
   const { register } = useAuth();
@@ -19,8 +27,9 @@ export default function RegisterPage() {
     try {
       await register(username, email, password);
       navigate('/login');
-    } catch (err: any) {
-      setError(err.response?.data?.detail || '注册失败');
+    } catch (err: unknown) {
+      const apiError = err as ApiErrorLike;
+      setError(apiError.response?.data?.detail || '注册失败');
     } finally {
       setLoading(false);
     }
@@ -50,6 +59,8 @@ export default function RegisterPage() {
               onChange={(e) => setUsername(e.target.value)}
               required
               minLength={3}
+              title="用户名"
+              placeholder="请输入用户名"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
@@ -61,6 +72,8 @@ export default function RegisterPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              title="邮箱"
+              placeholder="请输入邮箱"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
@@ -73,6 +86,8 @@ export default function RegisterPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
+              title="密码"
+              placeholder="请输入密码"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>

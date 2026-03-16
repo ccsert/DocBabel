@@ -65,13 +65,44 @@ export default function AdminPage() {
   }, [taskPage]);
 
   useEffect(() => {
-    fetchStats();
+    let active = true;
+
+    void (async () => {
+      const res = await adminApi.stats();
+      if (active) {
+        setStats(res.data);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
-    if (tab === 'users') fetchUsers();
-    if (tab === 'tasks') fetchTasks();
-  }, [tab, fetchTasks]);
+    let active = true;
+
+    void (async () => {
+      if (tab === 'users') {
+        const res = await adminApi.listUsers();
+        if (active) {
+          setUsers(res.data);
+        }
+      }
+
+      if (tab === 'tasks') {
+        const res = await adminApi.listTasks({ page: taskPage, page_size: 20 });
+        if (active) {
+          setTasks(res.data.tasks);
+          setTaskTotal(res.data.total);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [tab, taskPage]);
 
   const toggleUserActive = async (user: User) => {
     await adminApi.updateUser(user.id, { is_active: !user.is_active });
@@ -168,21 +199,28 @@ export default function AdminPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
                       <button
+                        type="button"
                         onClick={() => toggleUserRole(u)}
+                        aria-label={u.role === 'admin' ? '降为用户' : '升为管理员'}
                         title={u.role === 'admin' ? '降为用户' : '升为管理员'}
                         className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                       >
                         {u.role === 'admin' ? <ShieldOff className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
                       </button>
                       <button
+                        type="button"
                         onClick={() => toggleUserActive(u)}
+                        aria-label={u.is_active ? '禁用用户' : '启用用户'}
                         title={u.is_active ? '禁用' : '启用'}
                         className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                       >
                         <Ban className="h-4 w-4" />
                       </button>
                       <button
+                        type="button"
                         onClick={() => deleteUser(u.id)}
+                        aria-label="删除用户"
+                        title="删除用户"
                         className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -217,7 +255,7 @@ export default function AdminPage() {
                 {tasks.map((t) => (
                   <tr key={t.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-gray-500">#{t.id}</td>
-                    <td className="max-w-[200px] truncate px-4 py-3 font-medium text-gray-900">{t.original_filename}</td>
+                    <td className="max-w-48 truncate px-4 py-3 font-medium text-gray-900">{t.original_filename}</td>
                     <td className="px-4 py-3 text-gray-500">{t.user_id}</td>
                     <td className="px-4 py-3 text-gray-500">{t.lang_in}→{t.lang_out}</td>
                     <td className="px-4 py-3">

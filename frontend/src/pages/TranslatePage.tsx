@@ -8,6 +8,15 @@ interface SelectOption {
   name: string;
 }
 
+interface ApiErrorLike {
+  response?: {
+    status?: number;
+    data?: {
+      detail?: string | { code?: string; existing_task_id?: number; has_mono?: boolean; has_dual?: boolean };
+    };
+  };
+}
+
 const LANGUAGES = [
   { value: 'en', label: '英语' },
   { value: 'zh', label: '中文' },
@@ -35,14 +44,24 @@ export default function TranslatePage() {
   const [noMono, setNoMono] = useState(false);
   const [enhanceCompat, setEnhanceCompat] = useState(false);
   const [ocrWorkaround, setOcrWorkaround] = useState(false);
+  const [autoExtract, setAutoExtract] = useState(false);
   const [customPrompt, setCustomPrompt] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [dragOver, setDragOver] = useState(false);
+  const [duplicateInfo, setDuplicateInfo] = useState<{
+    existingTaskId: number;
+    hasMono: boolean;
+    hasDual: boolean;
+  } | null>(null);
+  const [requireConfigChangeForRegenerate, setRequireConfigChangeForRegenerate] = useState(false);
+  const [modalLoading, setModalLoading] = useState(false);
 
   const [glossaries, setGlossaries] = useState<SelectOption[]>([]);
   const [models, setModels] = useState<SelectOption[]>([]);
+
+  const getApiError = (err: unknown) => err as ApiErrorLike;
 
   useEffect(() => {
     glossariesApi.list().then((r) => setGlossaries(r.data));
@@ -56,12 +75,22 @@ export default function TranslatePage() {
     if (f && f.name.toLowerCase().endsWith('.pdf')) setFile(f);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!file) return;
-    setError('');
-    setLoading(true);
+  const triggerDownload = async (taskId: number, type: 'mono' | 'dual') => {
+    const token = localStorage.getItem('token');
+    const url = tasksApi.downloadUrl(taskId, type);
+    const a = document.createElement('a');
+    a.download = '';
+    const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!resp.ok) throw new Error('下载失败');
+    const blob = await resp.blob();
+    const objUrl = URL.createObjectURL(blob);
+    a.href = objUrl;
+    a.click();
+    URL.revokeObjectURL(objUrl);
+  };
 
+  const buildFormData = (opts?: { reuseExisting?: boolean; forceRegenerate?: boolean }) => {
+    if (!file) return null;
     const formData = new FormData();
     formData.append('file', file);
     formData.append('lang_in', langIn);
@@ -74,16 +103,78 @@ export default function TranslatePage() {
     formData.append('no_mono', String(noMono));
     formData.append('enhance_compatibility', String(enhanceCompat));
     formData.append('ocr_workaround', String(ocrWorkaround));
+    formData.append('auto_extract_glossary', String(autoExtract));
     if (customPrompt) formData.append('custom_system_prompt', customPrompt);
+    if (opts?.reuseExisting) formData.append('reuse_existing', 'true');
+    if (opts?.forceRegenerate || requireConfigChangeForRegenerate) {
+      formData.append('force_regenerate', 'true');
+    }
+    return formData;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!file) return;
+    setError('');
+    setLoading(true);
+    const formData = buildFormData();
+    if (!formData) {
+      setLoading(false);
+      return;
+    }
 
     try {
       await tasksApi.create(formData);
       navigate('/tasks');
-    } catch (err: any) {
-      setError(err.response?.data?.detail || '提交失败');
+    } catch (err: unknown) {
+      const apiError = getApiError(err);
+      const detail = apiError.response?.data?.detail;
+      if (
+        apiError.response?.status === 409
+        && typeof detail !== 'string'
+        && detail?.code === 'duplicate_translation_exists'
+        && typeof detail.existing_task_id === 'number'
+      ) {
+        setDuplicateInfo({
+          existingTaskId: detail.existing_task_id,
+          hasMono: Boolean(detail.has_mono),
+          hasDual: Boolean(detail.has_dual),
+        });
+      } else {
+        setError(typeof detail === 'string' ? detail : '提交失败');
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleReuseAndDownload = async () => {
+    const formData = buildFormData({ reuseExisting: true });
+    if (!formData) return;
+    setModalLoading(true);
+    setError('');
+    try {
+      const res = await tasksApi.create(formData);
+      const task = res.data;
+      const downloadType: 'mono' | 'dual' | null = task.output_mono_filename ? 'mono' : (task.output_dual_filename ? 'dual' : null);
+      if (downloadType) {
+        await triggerDownload(task.id, downloadType);
+      }
+      setDuplicateInfo(null);
+      setRequireConfigChangeForRegenerate(false);
+      navigate('/tasks');
+    } catch (err: unknown) {
+      const detail = getApiError(err).response?.data?.detail;
+      setError(typeof detail === 'string' ? detail : '复用失败');
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  const handleRegenerateChoice = () => {
+    setDuplicateInfo(null);
+    setRequireConfigChangeForRegenerate(true);
+    setError('已选择重新生成。请修改任一翻译配置后再次提交，例如术语表、页码、提示词、extra_body、输出选项或模型参数。');
   };
 
   return (
@@ -136,6 +227,7 @@ export default function TranslatePage() {
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700">源语言</label>
             <select
+              title="源语言"
               value={langIn}
               onChange={(e) => setLangIn(e.target.value)}
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -148,6 +240,7 @@ export default function TranslatePage() {
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700">目标语言</label>
             <select
+              title="目标语言"
               value={langOut}
               onChange={(e) => setLangOut(e.target.value)}
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -164,6 +257,7 @@ export default function TranslatePage() {
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700">翻译模型</label>
             <select
+              title="翻译模型"
               value={modelId}
               onChange={(e) => setModelId(e.target.value)}
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -177,6 +271,7 @@ export default function TranslatePage() {
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700">术语表</label>
             <select
+              title="术语表"
               value={glossaryId}
               onChange={(e) => setGlossaryId(e.target.value)}
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -231,6 +326,8 @@ export default function TranslatePage() {
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-gray-700">自定义系统提示词</label>
                 <textarea
+                  title="自定义系统提示词"
+                  placeholder="可选：补充领域约束、术语风格或输出要求"
                   value={customPrompt}
                   onChange={(e) => setCustomPrompt(e.target.value)}
                   rows={2}
@@ -255,6 +352,13 @@ export default function TranslatePage() {
                   <input type="checkbox" checked={ocrWorkaround} onChange={(e) => setOcrWorkaround(e.target.checked)} className="rounded border-gray-300" />
                   OCR 模式
                 </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700 col-span-2">
+                  <input type="checkbox" checked={autoExtract} onChange={(e) => setAutoExtract(e.target.checked)} className="rounded border-gray-300" />
+                  <span>
+                    自动提取术语
+                    <span className="ml-1.5 text-xs text-gray-400">翻译前 AI 提取专业术语，保障全文一致性，完成后可保存到术语表</span>
+                  </span>
+                </label>
               </div>
             </div>
           )}
@@ -272,6 +376,47 @@ export default function TranslatePage() {
           {loading ? '提交中...' : '开始翻译'}
         </button>
       </form>
+
+      {duplicateInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl">
+            <div className="border-b border-gray-100 px-6 py-4">
+              <h2 className="text-lg font-semibold text-gray-900">检测到已有译文</h2>
+              <p className="mt-1 text-sm text-gray-600">
+                该 PDF 在相同翻译配置下已有译文，可直接复用结果；如果你修改了术语表或其他翻译参数，也可以重新提交。
+              </p>
+            </div>
+            <div className="px-6 py-4 text-sm text-gray-700 space-y-2">
+              <p>已有任务 ID: {duplicateInfo.existingTaskId}</p>
+              <p>可下载文件: {duplicateInfo.hasMono ? '译文 PDF ' : ''}{duplicateInfo.hasDual ? '双语 PDF' : ''}</p>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-gray-100 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setDuplicateInfo(null)}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleRegenerateChoice}
+                className="rounded-lg border border-orange-300 px-4 py-2 text-sm font-medium text-orange-700 hover:bg-orange-50"
+              >
+                重新生成（需修改配置）
+              </button>
+              <button
+                type="button"
+                onClick={handleReuseAndDownload}
+                disabled={modalLoading}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {modalLoading ? '处理中...' : '直接复用并下载'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

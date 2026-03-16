@@ -4,9 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import require_admin
-from app.core.security import get_password_hash
 from app.models.models import User, UserRole, TranslationTask, TaskStatus
-from app.schemas.schemas import UserOut, UserUpdate, TaskOut, TaskListOut
+from app.schemas.schemas import UserOut, UserUpdate, TaskListOut
 
 router = APIRouter(prefix="/admin", tags=["管理员"], dependencies=[Depends(require_admin)])
 
@@ -64,12 +63,12 @@ async def list_all_tasks(
         count_query = count_query.where(TranslationTask.status == TaskStatus(status))
 
     total_result = await db.execute(count_query)
-    total = total_result.scalar()
+    total = total_result.scalar() or 0
 
     query = query.order_by(TranslationTask.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
-    tasks = result.scalars().all()
-    return TaskListOut(tasks=tasks, total=total)
+    tasks = list(result.scalars().all())
+    return {"tasks": tasks, "total": total}
 
 
 @router.post("/tasks/{task_id}/cancel")
