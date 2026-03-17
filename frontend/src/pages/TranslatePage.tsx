@@ -278,7 +278,16 @@ export default function TranslatePage() {
               ))}
             </select>
             {models.length === 0 && (
-              <p className="mt-1 text-xs text-amber-600">请先在“模型”页面创建至少一个模型配置，再提交翻译任务。</p>
+              <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                <p className="text-xs text-amber-700">请先在“模型”页面创建至少一个模型配置，再提交翻译任务。</p>
+                <button
+                  type="button"
+                  onClick={() => navigate('/models')}
+                  className="shrink-0 rounded-md border border-amber-300 bg-white px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                >
+                  前往模型页
+                </button>
+              </div>
             )}
           </div>
           <div>
