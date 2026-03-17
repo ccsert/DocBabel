@@ -1,167 +1,220 @@
 # BabelDOC Web
 
-基于 [BabelDOC](https://github.com/funstory-ai/BabelDOC) 核心引擎的 Web 翻译平台，提供用户友好的操作界面。
+[简体中文](README.zh-CN.md) | English
 
-## 功能特性
+A web platform for PDF document translation, powered by the [BabelDOC](https://github.com/funstory-ai/BabelDOC) engine. It provides user management, model configuration, task queuing, glossary management, offline asset operations, and an admin console.
 
-- **用户管理**: 注册/登录、角色权限（管理员/普通用户）
-- **文档翻译**: 上传 PDF 文档进行翻译，支持后台异步处理
-- **翻译队列**: 并发控制与排队策略，避免翻译过载
-- **术语表**: 创建和维护翻译术语表，提升翻译一致性
-- **自定义模型**: 配置自定义翻译模型（OpenAI 兼容 API），支持 `extra_body` 自定义参数
-- **管理后台**: 管理员可管理用户、查看所有任务、系统统计
+## Screenshots
 
-## 技术栈
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/readme/login-page.png" alt="Login page"></td>
+    <td width="50%"><img src="docs/images/readme/translate-dashboard.png" alt="Translation dashboard"></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/readme/tasks-page.png" alt="Tasks page"></td>
+    <td width="50%"><img src="docs/images/readme/admin-page.png" alt="Admin dashboard"></td>
+  </tr>
+</table>
 
-- **后端**: FastAPI + SQLAlchemy + PostgreSQL
-- **前端**: React + Vite + Tailwind CSS
-- **核心**: BabelDOC 翻译引擎
+## Features
 
-## 快速开始
+- **User system** — Sign-up, sign-in, admin roles, and access separation
+- **Translation tasks** — Create, queue, cancel, download, and track PDF translation jobs
+- **Glossary management** — Maintain glossaries and save automatically extracted terms
+- **Model configuration** — OpenAI-compatible model setup with `extra_body` pass-through
+- **Offline assets** — Restore, check, export, and validate with profile-based preflight
+- **Admin console** — System stats, user management, and global task overview
 
-### 1. 启动中间件（PostgreSQL + Redis）
+## Tech Stack
+
+| Layer | Technologies |
+|-------|-------------|
+| Backend | FastAPI, SQLAlchemy, PostgreSQL, Alembic |
+| Frontend | React, Vite, Tailwind CSS |
+| Queue & Cache | Redis |
+| Translation | BabelDOC |
+
+## Quick Start
+
+### 1. Start infrastructure
 
 ```bash
 docker compose up -d
 ```
 
-这会启动 PostgreSQL 16 和 Redis 7，默认配置即可直连，无需额外设置。
+This starts PostgreSQL and Redis with the default local setup.
 
-### 2. 启动后端
+### 2. Start backend
 
 ```bash
 cd backend
 
-# 使用 uv 安装依赖（自动创建虚拟环境）
 uv sync
-
-# 执行数据库迁移（首次和后续升级都需要）
 uv run alembic upgrade head
-
-# 配置环境变量
 cp .env.example .env
-# 编辑 .env 文件，设置密钥等
-
-# 启动服务
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 3. 启动前端
+### 3. Start frontend
 
 ```bash
 cd frontend
 
-# 安装依赖
 npm install
-
-# 开发模式启动
 npm run dev
 ```
 
-访问 http://localhost:5173 即可使用。
+By default, the frontend runs at `http://localhost:5173` and the backend at `http://localhost:8000`.
 
-### 4. 首次使用
+## First Run
 
-1. 注册第一个账户（自动成为管理员）
-2. 在「模型」页面配置翻译模型（API Key 等）
-3. 在「翻译」页面上传 PDF 开始翻译
+1. Register the first account — it automatically becomes the admin.
+2. Add at least one translation model on the **Models** page.
+3. Upload a PDF and submit a task on the **Translate** page.
+4. Track progress and download results on the **Tasks** page.
 
-## 项目结构
+## Features in Detail
+
+### Translation Workflow
+
+- Upload a PDF and choose source/target language, model, and glossary.
+- Produce bilingual or monolingual output files.
+- Save automatically extracted terms into reusable glossaries.
+
+### Admin Console
+
+- View total users, total tasks, running tasks, and queued tasks.
+- Manage users and global tasks.
+- Inspect offline asset readiness and trigger restore or export actions.
+
+### Offline Deployment
+
+Environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `BABELDOC_OFFLINE_MODE=true` | Enable offline mode |
+| `BABELDOC_OFFLINE_ASSETS_PACKAGE=/path/to/pkg.zip` | Path to offline assets package |
+| `BABELDOC_PRECHECK_ASSETS_ON_STARTUP=true` | Run asset pre-check on startup |
+| `BABELDOC_OFFLINE_ASSET_PROFILE=full\|core\|minimal` | Asset profile level |
+
+Profile guidance:
+
+| Profile | Use Case |
+|---------|----------|
+| `full` | Strict offline environments |
+| `core` | Development and integration testing |
+| `minimal` | Minimal startup validation only |
+
+## Project Structure
 
 ```
 web/
 ├── backend/
 │   ├── app/
-│   │   ├── api/          # API 路由
-│   │   │   ├── auth.py       # 认证（登录/注册）
-│   │   │   ├── tasks.py      # 翻译任务
-│   │   │   ├── glossaries.py # 术语表
-│   │   │   ├── models.py     # 自定义模型
-│   │   │   └── admin.py      # 管理员接口
-│   │   ├── core/         # 核心配置
-│   │   │   ├── config.py     # 应用配置
-│   │   │   ├── database.py   # 数据库连接
-│   │   │   ├── deps.py       # 依赖注入
-│   │   │   └── security.py   # 安全（JWT/密码）
-│   │   ├── models/       # 数据库模型
-│   │   │   └── models.py     # SQLAlchemy ORM 模型
-│   │   ├── schemas/      # Pydantic Schema
-│   │   │   └── schemas.py
-│   │   ├── services/     # 业务服务
-│   │   │   ├── queue.py          # 翻译队列
-│   │   │   └── translator_worker.py # 翻译工作线程
-│   │   └── main.py       # FastAPI 入口
-│   ├── pyproject.toml    # uv 项目配置
-│   └── .env.example
+│   │   ├── api/          # Auth, tasks, glossaries, models, admin
+│   │   ├── core/         # Config, database, deps, security
+│   │   ├── models/       # ORM models
+│   │   ├── schemas/      # Pydantic schemas
+│   │   ├── services/     # Queue, translator worker, asset services
+│   │   └── main.py       # FastAPI entry point
+│   ├── alembic.ini
+│   └── pyproject.toml
 ├── frontend/
 │   ├── src/
-│   │   ├── api.ts         # API 客户端
-│   │   ├── auth.tsx       # 认证上下文
 │   │   ├── components/
-│   │   │   └── Layout.tsx # 应用布局
-│   │   └── pages/
-│   │       ├── LoginPage.tsx      # 登录
-│   │       ├── RegisterPage.tsx   # 注册
-│   │       ├── TranslatePage.tsx  # 翻译上传
-│   │       ├── TasksPage.tsx      # 任务列表
-│   │       ├── GlossariesPage.tsx # 术语表管理
-│   │       ├── ModelsPage.tsx     # 模型管理
-│   │       └── AdminPage.tsx      # 管理后台
+│   │   ├── pages/
+│   │   ├── api.ts
+│   │   ├── auth.tsx
+│   │   └── App.tsx
 │   └── package.json
+├── docs/
+├── docker-compose.yml
+├── LICENSE
 └── README.md
 ```
 
-## API 端点
+## API Reference
 
-### 认证
-- `POST /api/auth/register` - 注册
-- `POST /api/auth/login` - 登录
-- `GET /api/auth/me` - 当前用户信息
+### Auth
 
-### 翻译任务
-- `POST /api/tasks` - 创建翻译任务（上传 PDF）
-- `GET /api/tasks` - 获取我的任务列表
-- `GET /api/tasks/{id}` - 获取任务详情
-- `POST /api/tasks/{id}/cancel` - 取消任务
-- `GET /api/tasks/{id}/download/{mono|dual}` - 下载翻译结果
-- `POST /api/tasks/{id}/save-glossary` - 将自动提取术语保存为术语表
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/register` | Register a new user |
+| POST | `/api/auth/login` | Log in |
+| GET | `/api/auth/me` | Get current user info |
 
-### 术语表
-- `GET /api/glossaries` - 术语表列表
-- `POST /api/glossaries` - 创建术语表
-- `PATCH /api/glossaries/{id}` - 更新术语表
-- `DELETE /api/glossaries/{id}` - 删除术语表
-- `POST /api/glossaries/{id}/entries` - 添加词条
-- `DELETE /api/glossaries/{id}/entries/{entry_id}` - 删除词条
+### Tasks
 
-### 自定义模型
-- `GET /api/models` - 模型列表
-- `POST /api/models` - 创建模型
-- `PATCH /api/models/{id}` - 更新模型
-- `DELETE /api/models/{id}` - 删除模型
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/tasks` | Create a translation task |
+| GET | `/api/tasks` | List tasks |
+| GET | `/api/tasks/{id}` | Get task details |
+| POST | `/api/tasks/{id}/cancel` | Cancel a task |
+| GET | `/api/tasks/{id}/download/{mono\|dual}` | Download output |
+| POST | `/api/tasks/{id}/save-glossary` | Save extracted glossary |
 
-### 管理员
-- `GET /api/admin/stats` - 系统统计
-- `GET /api/admin/users` - 用户列表
-- `PATCH /api/admin/users/{id}` - 更新用户
-- `DELETE /api/admin/users/{id}` - 删除用户
-- `GET /api/admin/tasks` - 所有任务列表
-- `POST /api/admin/tasks/{id}/cancel` - 取消任务
+### Glossaries
 
-## extra_body 自定义参数
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/glossaries` | List glossaries |
+| POST | `/api/glossaries` | Create a glossary |
+| PATCH | `/api/glossaries/{id}` | Update a glossary |
+| DELETE | `/api/glossaries/{id}` | Delete a glossary |
+| POST | `/api/glossaries/{id}/entries` | Add an entry |
+| DELETE | `/api/glossaries/{id}/entries/{entry_id}` | Delete an entry |
 
-支持在两个层级设置 `extra_body`：
+### Models
 
-1. **模型级别**: 在模型配置中设置默认的 `extra_body`，所有使用该模型的翻译任务会自动应用
-2. **任务级别**: 在创建翻译任务时设置 `extra_body`，会覆盖模型配置中的同名参数
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/models` | List models |
+| POST | `/api/models` | Create a model |
+| PATCH | `/api/models/{id}` | Update a model |
+| DELETE | `/api/models/{id}` | Delete a model |
 
-示例：
+### Admin
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/admin/stats` | System statistics |
+| GET | `/api/admin/users` | List users |
+| PATCH | `/api/admin/users/{id}` | Update a user |
+| DELETE | `/api/admin/users/{id}` | Delete a user |
+| GET | `/api/admin/tasks` | List all tasks |
+| POST | `/api/admin/tasks/{id}/cancel` | Cancel any task |
+| GET | `/api/admin/offline-assets/status` | Asset status |
+| POST | `/api/admin/offline-assets/check` | Check assets |
+| POST | `/api/admin/offline-assets/restore` | Restore assets |
+| POST | `/api/admin/offline-assets/export` | Export assets |
+| GET | `/api/admin/offline-assets/export/download` | Download export |
+
+## `extra_body` Support
+
+The platform supports `extra_body` at both the model-default level and the per-task override level.
 
 ```json
 {
-  "reasoning": {"effort": "high"},
-  "chat_template_kwargs": {"enable_thinking": false}
+  "reasoning": { "effort": "high" },
+  "chat_template_kwargs": { "enable_thinking": false }
 }
 ```
 
-这些参数会直接传递给 OpenAI API 的 `extra_body` 参数，支持各种 API 提供商的自定义功能。
+## License
+
+This project is licensed under [AGPL-3.0](LICENSE), aligned with its runtime dependency [BabelDOC](https://github.com/funstory-ai/BabelDOC).
+
+> **Note:** The backend pins `babeldoc==0.5.23` in [backend/pyproject.toml](backend/pyproject.toml). If you deploy this project as a network service, redistribute it, or publish modified versions, review the license obligations inherited from BabelDOC and its third-party dependencies. This is an engineering compliance reminder, not legal advice.
+
+## Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request.
+
+## Roadmap
+
+- [ ] Production deployment docs and reverse-proxy examples
+- [ ] Third-party dependency license notice
+- [ ] Docker-first quick-start guide
