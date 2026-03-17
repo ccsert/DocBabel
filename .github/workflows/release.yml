@@ -1,0 +1,299 @@
+name: Build Offline Docker Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      offline_profile:
+        description: 'Offline asset profile (full/core/minimal)'
+        required: false
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - core
+          - minimal
+
+env:
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE: babeldoc-backend
+  FRONTEND_IMAGE: babeldoc-frontend
+
+jobs:
+  build-offline-package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set version tag
+        id: version
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="dev-$(date +%Y%m%d)-${GITHUB_SHA::8}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Building version: ${VERSION}"
+
+      # ── Generate offline assets first ────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: |
+          pip install uv
+          uv pip install --system .
+
+      - name: Generate offline assets package
+        working-directory: ./backend
+        run: |
+          python -c "
+          import asyncio
+          from babeldoc.assets.assets import async_warmup, generate_all_assets_file_list, get_offline_assets_tag
+          from app.services.babeldoc_assets import _write_offline_assets_package
+          from pathlib import Path
+
+          async def main():
+              print('Warming up BabelDOC assets...')
+              await async_warmup()
+              output_dir = Path('offline-assets-export')
+              output_dir.mkdir(exist_ok=True)
+              tag = get_offline_assets_tag(generate_all_assets_file_list())
+              output_path = output_dir / f'offline_assets_{tag}.zip'
+              print(f'Packaging offline assets to {output_path}...')
+              _write_offline_assets_package(output_path)
+              print(f'Offline assets package created: {output_path} ({output_path.stat().st_size} bytes)')
+
+          asyncio.run(main())
+          "
+
+      # ── Login to GitHub Container Registry ──────────────────────────
+      - name: Login to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Build Docker images ──────────────────────────────────────────
+      - name: Build backend base image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          load: true
+          tags: ${{ env.BACKEND_IMAGE }}:base
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build offline backend image with bundled assets
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p /tmp/offline-build
+          cp backend/offline-assets-export/offline_assets_*.zip /tmp/offline-build/
+
+          cat > /tmp/offline-build/Dockerfile << 'EOF'
+          FROM babeldoc-backend:base
+          RUN mkdir -p /app/bundled-offline-assets
+          COPY offline_assets_*.zip /app/bundled-offline-assets/
+          ENV BABELDOC_OFFLINE_MODE=true
+          ENV BABELDOC_OFFLINE_ASSETS_PACKAGE=/app/bundled-offline-assets
+          ENV BABELDOC_OFFLINE_ASSET_PROFILE=full
+          ENV BABELDOC_PRECHECK_ASSETS_ON_STARTUP=true
+          EOF
+
+          docker build -t ${{ env.BACKEND_IMAGE }}:${VERSION} \
+                       -t ${{ env.BACKEND_IMAGE }}:latest \
+                       /tmp/offline-build
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          load: true
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.version }}
+            ${{ env.FRONTEND_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Pull dependency images ───────────────────────────────────────
+      - name: Pull dependency images
+        run: |
+          docker pull postgres:16-alpine
+          docker pull redis:7-alpine
+
+      # ── Save Docker images to tar ───────────────────────────────────
+      - name: Save Docker images
+        run: |
+          mkdir -p package/images
+          echo "Saving backend image (with bundled offline assets)..."
+          docker save ${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.version }} \
+                      ${{ env.BACKEND_IMAGE }}:latest \
+            | gzip > package/images/babeldoc-backend.tar.gz
+
+          echo "Saving frontend image..."
+          docker save ${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.version }} \
+                      ${{ env.FRONTEND_IMAGE }}:latest \
+            | gzip > package/images/babeldoc-frontend.tar.gz
+
+          echo "Saving postgres image..."
+          docker save postgres:16-alpine | gzip > package/images/postgres.tar.gz
+
+          echo "Saving redis image..."
+          docker save redis:7-alpine | gzip > package/images/redis.tar.gz
+
+      # ── Assemble offline package ─────────────────────────────────────
+      - name: Assemble offline package
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Copy docker-compose and scripts
+          cp docker-compose.yml package/
+          cp scripts/install.sh package/
+          chmod +x package/install.sh
+
+          # Create version file
+          echo "${VERSION}" > package/VERSION
+
+          # Create README for the package
+          cat > package/README.md << 'PKGEOF'
+          # BabelDOC 离线安装包
+
+          ## 系统要求
+
+          - Docker Engine >= 20.10
+          - Docker Compose >= 2.0
+          - 至少 8GB 可用磁盘空间
+
+          ## 安装步骤
+
+          1. 将此安装包解压到目标机器
+          2. 运行安装脚本：
+
+          ```bash
+          chmod +x install.sh
+          ./install.sh
+          ```
+
+          安装脚本将自动：
+          - 加载所有 Docker 镜像（后端镜像已内置完整离线资源）
+          - 启动所有服务
+
+          ## 手动安装
+
+          如需手动安装，依次执行：
+
+          ```bash
+          # 1. 加载 Docker 镜像
+          for img in images/*.tar.gz; do
+            docker load < "$img"
+          done
+
+          # 2. 启动服务
+          docker compose up -d
+          ```
+
+          ## 访问
+
+          启动完成后，访问 http://localhost 即可使用。
+
+          ## 离线说明
+
+          后端 Docker 镜像已内置完整 BabelDOC 离线资源（模型、字体、
+          CMap、tiktoken 缓存），无需额外下载或导入资源文件，
+          完全支持断网环境运行。
+
+          ## 默认配置
+
+          - 数据库：PostgreSQL 16 (内部端口 5432)
+          - 缓存：Redis 7 (内部端口 6379)
+          - 后端 API：端口 8000（内部）
+          - 前端 Web：端口 80
+
+          PKGEOF
+
+          # Create the tarball
+          tar czf "babeldoc-offline-${VERSION}.tar.gz" -C package .
+
+          echo "Package created: babeldoc-offline-${VERSION}.tar.gz"
+          ls -lh "babeldoc-offline-${VERSION}.tar.gz"
+
+      # ── Upload artifact ──────────────────────────────────────────────
+      - name: Upload offline package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: babeldoc-offline-${{ steps.version.outputs.version }}
+          path: babeldoc-offline-${{ steps.version.outputs.version }}.tar.gz
+          retention-days: 30
+
+      # ── Create Release (only on tag push) ────────────────────────────
+      - name: Create GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: BabelDOC ${{ steps.version.outputs.version }}
+          files: babeldoc-offline-${{ steps.version.outputs.version }}.tar.gz
+          generate_release_notes: true
+          body: |
+            ## BabelDOC 离线安装包
+
+            此安装包包含完整的 Docker 离线部署所需的全部文件：
+
+            - **Docker 镜像**：backend、frontend、PostgreSQL 16、Redis 7
+            - **BabelDOC 离线资源**：模型、字体、CMap、tiktoken 缓存
+            - **部署脚本**：一键安装脚本
+
+            ### 使用方法
+
+            ```bash
+            tar xzf babeldoc-offline-${{ steps.version.outputs.version }}.tar.gz -C babeldoc
+            cd babeldoc
+            chmod +x install.sh
+            ./install.sh
+            ```
+
+            启动后访问 http://localhost
+
+            ### 在线部署（需联网）
+
+            ```bash
+            docker pull ghcr.io/${{ github.repository_owner }}/babeldoc-backend:${{ steps.version.outputs.version }}
+            docker pull ghcr.io/${{ github.repository_owner }}/babeldoc-frontend:${{ steps.version.outputs.version }}
+            ```
+
+      # ── Push images to GitHub Container Registry ─────────────────────
+      - name: Tag and push backend image to ghcr.io
+        if: github.ref_type == 'tag'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          OWNER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          docker tag ${{ env.BACKEND_IMAGE }}:${VERSION} ${{ env.REGISTRY }}/${OWNER}/${{ env.BACKEND_IMAGE }}:${VERSION}
+          docker tag ${{ env.BACKEND_IMAGE }}:latest ${{ env.REGISTRY }}/${OWNER}/${{ env.BACKEND_IMAGE }}:latest
+          docker push ${{ env.REGISTRY }}/${OWNER}/${{ env.BACKEND_IMAGE }}:${VERSION}
+          docker push ${{ env.REGISTRY }}/${OWNER}/${{ env.BACKEND_IMAGE }}:latest
+
+      - name: Tag and push frontend image to ghcr.io
+        if: github.ref_type == 'tag'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          OWNER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          docker tag ${{ env.FRONTEND_IMAGE }}:${VERSION} ${{ env.REGISTRY }}/${OWNER}/${{ env.FRONTEND_IMAGE }}:${VERSION}
+          docker tag ${{ env.FRONTEND_IMAGE }}:latest ${{ env.REGISTRY }}/${OWNER}/${{ env.FRONTEND_IMAGE }}:latest
+          docker push ${{ env.REGISTRY }}/${OWNER}/${{ env.FRONTEND_IMAGE }}:${VERSION}
+          docker push ${{ env.REGISTRY }}/${OWNER}/${{ env.FRONTEND_IMAGE }}:latest

@@ -31,6 +31,49 @@ services:
       timeout: 5s
       retries: 5
 
+  backend:
+    image: babeldoc-backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: babeldoc-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://babeldoc:babeldoc@postgres:5432/babeldoc
+      BABELDOC_OFFLINE_MODE: ${BABELDOC_OFFLINE_MODE:-true}
+      BABELDOC_OFFLINE_ASSETS_PACKAGE: ${BABELDOC_OFFLINE_ASSETS_PACKAGE:-/app/bundled-offline-assets}
+      BABELDOC_OFFLINE_ASSET_PROFILE: ${BABELDOC_OFFLINE_ASSET_PROFILE:-full}
+      BABELDOC_PRECHECK_ASSETS_ON_STARTUP: ${BABELDOC_PRECHECK_ASSETS_ON_STARTUP:-true}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production-use-a-long-random-string}
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_outputs:/app/outputs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; r = httpx.get('http://localhost:8000/api/health'); r.raise_for_status()"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    image: babeldoc-frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: babeldoc-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
 volumes:
   postgres_data:
   redis_data:
+  backend_uploads:
+  backend_outputs:
