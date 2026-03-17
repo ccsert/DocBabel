@@ -1,6 +1,7 @@
 """Worker that runs BabelDOC translation in a background thread."""
 
 import asyncio
+import inspect
 import logging
 import os
 import shutil
@@ -194,12 +195,6 @@ def _do_translation(
     progress_state: _ProgressState,
 ):
     """Synchronous translation using BabelDOC core, runs in thread pool."""
-    import sys
-    # Ensure BabelDOC package is importable
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-    if project_root not in sys.path:
-        sys.path.insert(0, project_root)
-
     from babeldoc.translator.translator import OpenAITranslator
     from babeldoc.glossary import Glossary as BabelGlossary, GlossaryEntry as BabelGlossaryEntry
 
@@ -228,17 +223,24 @@ def _do_translation(
     if extra_body:
         translator_extra_body.update(extra_body)
 
-    translator = OpenAITranslator(
-        lang_in=lang_in,
-        lang_out=lang_out,
-        model=model_name,
-        base_url=base_url,
-        api_key=api_key,
-        send_temperature=send_temperature,
-        reasoning=reasoning,
-        disable_thinking=disable_thinking,
-        enable_json_mode_if_requested=enable_json_mode,
-    )
+    translator_kwargs = {
+        "lang_in": lang_in,
+        "lang_out": lang_out,
+        "model": model_name,
+        "base_url": base_url,
+        "api_key": api_key,
+        "send_temperature": send_temperature,
+        "reasoning": reasoning,
+        "enable_json_mode_if_requested": enable_json_mode,
+    }
+
+    supported_translator_args = set(inspect.signature(OpenAITranslator.__init__).parameters)
+    if "disable_thinking" in supported_translator_args:
+        translator_kwargs["disable_thinking"] = disable_thinking
+    elif disable_thinking:
+        translator_extra_body.setdefault("chat_template_kwargs", {})["enable_thinking"] = False
+
+    translator = OpenAITranslator(**translator_kwargs)
 
     # Apply extra_body to translator
     if translator_extra_body:
