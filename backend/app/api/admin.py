@@ -1,13 +1,30 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import require_admin
 from app.models.models import User, UserRole, TranslationTask, TaskStatus
 from app.schemas.schemas import UserOut, UserUpdate, TaskListOut
+from app.services.babeldoc_assets import get_latest_offline_assets_package_path
+from app.services.babeldoc_assets import get_offline_assets_export_status
+from app.services.babeldoc_assets import get_offline_assets_status
+from app.services.babeldoc_assets import restore_offline_assets_package
+from app.services.babeldoc_assets import start_offline_assets_export
 
 router = APIRouter(prefix="/admin", tags=["管理员"], dependencies=[Depends(require_admin)])
+
+
+def _build_offline_assets_response(force: bool = False) -> dict:
+    status = get_offline_assets_status(force=force)
+    return {
+        "offline_mode": settings.BABELDOC_OFFLINE_MODE,
+        "offline_assets_package_configured": bool(settings.BABELDOC_OFFLINE_ASSETS_PACKAGE),
+        "export": get_offline_assets_export_status(),
+        **status,
+    }
 
 
 # ─── User management ─────────────────────────────────────
@@ -100,3 +117,48 @@ async def dashboard_stats(db: AsyncSession = Depends(get_db)):
         "running_tasks": running,
         "queued_tasks": queued,
     }
+
+
+@router.get("/offline-assets/status")
+async def offline_assets_status():
+    return _build_offline_assets_response()
+
+
+@router.post("/offline-assets/check")
+async def check_offline_assets():
+    return _build_offline_assets_response(force=True)
+
+
+@router.post("/offline-assets/restore")
+async def restore_configured_offline_assets():
+    if not settings.BABELDOC_OFFLINE_ASSETS_PACKAGE:
+        raise HTTPException(status_code=400, detail="未配置 BABELDOC_OFFLINE_ASSETS_PACKAGE")
+    await restore_offline_assets_package(settings.BABELDOC_OFFLINE_ASSETS_PACKAGE)
+    return {
+        "detail": "离线资源包恢复完成",
+        **_build_offline_assets_response(force=True),
+    }
+
+
+@router.post("/offline-assets/export")
+async def export_offline_assets():
+    try:
+        await start_offline_assets_export()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {
+        "detail": "离线资源导出任务已启动",
+        **_build_offline_assets_response(),
+    }
+
+
+@router.get("/offline-assets/export/download")
+async def download_offline_assets_export():
+    package_path = get_latest_offline_assets_package_path()
+    if package_path is None or not package_path.exists():
+        raise HTTPException(status_code=404, detail="暂无可下载的离线资源包")
+    return FileResponse(
+        package_path,
+        filename=package_path.name,
+        media_type="application/zip",
+    )
