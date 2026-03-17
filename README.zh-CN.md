@@ -99,6 +99,42 @@ npm run dev
 
 默认开发地址：前端 `http://localhost:5173`，后端 `http://localhost:8000`。
 
+## Docker 部署
+
+### 一键部署
+
+```bash
+docker compose up -d --build
+```
+
+将构建并启动全部 4 个服务（PostgreSQL、Redis、后端、前端），启动后访问 `http://localhost`。
+
+### 从 GitHub Container Registry 拉取
+
+每次发布 Release 时会自动推送预构建镜像（后端已内置离线资源）：
+
+```bash
+docker pull ghcr.io/ccsert/babeldoc-backend:latest
+docker pull ghcr.io/ccsert/babeldoc-frontend:latest
+```
+
+### 离线安装包
+
+适用于无网络环境，从 [Releases](https://github.com/ccsert/DocBabel/releases) 页面下载离线安装包。包含：
+
+- 全部 Docker 镜像（后端已内置完整离线资源、前端、PostgreSQL、Redis）
+- `docker-compose.yml`
+- 一键安装脚本
+
+```bash
+tar xzf babeldoc-offline-v*.tar.gz -C babeldoc
+cd babeldoc
+chmod +x install.sh
+./install.sh
+```
+
+后端镜像已包含全部 BabelDOC 运行资源（模型、字体、CMap、tiktoken 缓存），完全无需额外下载。
+
 ## 首次使用
 
 1. 注册第一个账户，系统会自动赋予管理员权限。
@@ -247,6 +283,6 @@ web/
 
 ## 路线图
 
-- [ ] 补充生产部署文档与反向代理示例
+- [x] 补充生产部署文档与反向代理示例
 - [ ] 生成第三方依赖许可证清单
-- [ ] 补充 Docker 化一键启动文档
+- [x] 补充 Docker 化一键启动文档

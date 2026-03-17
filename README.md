@@ -99,6 +99,42 @@ npm run dev
 
 By default, the frontend runs at `http://localhost:5173` and the backend at `http://localhost:8000`.
 
+## Docker Deployment
+
+### One-command deploy
+
+```bash
+docker compose up -d --build
+```
+
+This builds and starts all 4 services (PostgreSQL, Redis, backend, frontend). Visit `http://localhost` when ready.
+
+### Pull from GitHub Container Registry
+
+Pre-built images (with offline assets bundled) are published on every release:
+
+```bash
+docker pull ghcr.io/ccsert/babeldoc-backend:latest
+docker pull ghcr.io/ccsert/babeldoc-frontend:latest
+```
+
+### Offline installation package
+
+For air-gapped environments, download the offline package from the [Releases](https://github.com/ccsert/DocBabel/releases) page. It contains:
+
+- All Docker images (backend with bundled offline assets, frontend, PostgreSQL, Redis)
+- `docker-compose.yml`
+- One-click install script
+
+```bash
+tar xzf babeldoc-offline-v*.tar.gz -C babeldoc
+cd babeldoc
+chmod +x install.sh
+./install.sh
+```
+
+The backend image includes all BabelDOC runtime assets (models, fonts, CMap, tiktoken cache), so no additional downloads are needed.
+
 ## First Run
 
 1. Register the first account — it automatically becomes the admin.
@@ -247,6 +283,6 @@ Contributions are welcome! Please open an issue or submit a pull request.
 
 ## Roadmap
 
-- [ ] Production deployment docs and reverse-proxy examples
+- [x] Production deployment docs and reverse-proxy examples
 - [ ] Third-party dependency license notice
-- [ ] Docker-first quick-start guide
+- [x] Docker-first quick-start guide
