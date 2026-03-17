@@ -8,12 +8,44 @@ A web platform for PDF document translation, powered by the [BabelDOC](https://g
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/readme/login-page.png" alt="Login page"></td>
-    <td width="50%"><img src="docs/images/readme/translate-dashboard.png" alt="Translation dashboard"></td>
+    <td width="50%" align="center">
+      <img src="docs/images/readme/login-page.png" width="100%" alt="Login page" />
+      <br /><em>Login</em>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/images/readme/translate-dashboard.png" width="100%" alt="Translation dashboard" />
+      <br /><em>Translate</em>
+    </td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/readme/tasks-page.png" alt="Tasks page"></td>
-    <td width="50%"><img src="docs/images/readme/admin-page.png" alt="Admin dashboard"></td>
+    <td width="50%" align="center">
+      <img src="docs/images/readme/translate-advanced.png" width="100%" alt="Advanced translation options" />
+      <br /><em>Advanced Options</em>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/images/readme/tasks-page.png" width="100%" alt="Tasks page" />
+      <br /><em>Tasks</em>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/images/readme/files-page.png" width="100%" alt="File library" />
+      <br /><em>File Library</em>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/images/readme/glossaries-page.png" width="100%" alt="Glossary management" />
+      <br /><em>Glossaries</em>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/images/readme/models-page.png" width="100%" alt="Model configuration" />
+      <br /><em>Models</em>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/images/readme/admin-page.png" width="100%" alt="Admin dashboard" />
+      <br /><em>Admin</em>
+    </td>
   </tr>
 </table>
 

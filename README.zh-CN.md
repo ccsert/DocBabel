@@ -8,12 +8,44 @@ BabelDOC Web 是一个面向 PDF 文档翻译场景的 Web 平台，基于 [Babe
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/readme/login-page.png" alt="登录页面"></td>
-    <td width="50%"><img src="docs/images/readme/translate-dashboard.png" alt="翻译面板"></td>
+    <td width="50%" align="center">
+      <img src="docs/images/readme/login-page.png" width="100%" alt="登录页面" />
+      <br /><em>登录</em>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/images/readme/translate-dashboard.png" width="100%" alt="翻译面板" />
+      <br /><em>翻译</em>
+    </td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/readme/tasks-page.png" alt="任务页面"></td>
-    <td width="50%"><img src="docs/images/readme/admin-page.png" alt="管理后台"></td>
+    <td width="50%" align="center">
+      <img src="docs/images/readme/translate-advanced.png" width="100%" alt="高级翻译选项" />
+      <br /><em>高级选项</em>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/images/readme/tasks-page.png" width="100%" alt="任务页面" />
+      <br /><em>任务管理</em>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/images/readme/files-page.png" width="100%" alt="文件库" />
+      <br /><em>文件库</em>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/images/readme/glossaries-page.png" width="100%" alt="术语表管理" />
+      <br /><em>术语表</em>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/images/readme/models-page.png" width="100%" alt="模型配置" />
+      <br /><em>模型配置</em>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/images/readme/admin-page.png" width="100%" alt="管理后台" />
+      <br /><em>管理后台</em>
+    </td>
   </tr>
 </table>
 
