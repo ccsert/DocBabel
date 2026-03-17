@@ -27,6 +27,19 @@ def _build_offline_assets_response(force: bool = False) -> dict:
     }
 
 
+async def _has_other_active_admin(db: AsyncSession, excluded_user_id: int) -> bool:
+    result = await db.execute(
+        select(User.id)
+        .where(
+            User.role == UserRole.admin,
+            User.is_active.is_(True),
+            User.id != excluded_user_id,
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 # ─── User management ─────────────────────────────────────
 
 @router.get("/users", response_model=list[UserOut])
@@ -41,6 +54,14 @@ async def update_user(user_id: int, data: UserUpdate, db: AsyncSession = Depends
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
+
+    next_role = UserRole(data.role) if data.role is not None else user.role
+    next_is_active = data.is_active if data.is_active is not None else user.is_active
+
+    if user.role == UserRole.admin and user.is_active and (next_role != UserRole.admin or not next_is_active):
+        if not await _has_other_active_admin(db, user.id):
+            raise HTTPException(status_code=400, detail="至少保留一个启用状态的管理员")
+
     if data.email is not None:
         user.email = data.email
     if data.is_active is not None:
@@ -58,6 +79,8 @@ async def delete_user(user_id: int, db: AsyncSession = Depends(get_db)):
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
+    if user.role == UserRole.admin and user.is_active and not await _has_other_active_admin(db, user.id):
+        raise HTTPException(status_code=400, detail="至少保留一个启用状态的管理员")
     await db.delete(user)
     await db.commit()
     return {"detail": "已删除"}

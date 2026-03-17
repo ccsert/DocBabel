@@ -25,9 +25,13 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="用户名或邮箱已存在")
 
-    # first user becomes admin
-    count_result = await db.execute(select(User.id).limit(1))
-    role = UserRole.admin if count_result.scalar_one_or_none() is None else UserRole.user
+    # If no active admin exists, the next registered user becomes admin as a recovery path.
+    admin_result = await db.execute(
+        select(User.id)
+        .where(User.role == UserRole.admin, User.is_active.is_(True))
+        .limit(1)
+    )
+    role = UserRole.admin if admin_result.scalar_one_or_none() is None else UserRole.user
 
     user = User(
         username=req.username,
