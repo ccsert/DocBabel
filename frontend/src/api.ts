@@ -121,4 +121,9 @@ export const adminApi = {
   listTasks: (params?: { status?: string; page?: number; page_size?: number }) =>
     api.get('/admin/tasks', { params }),
   cancelTask: (id: number) => api.post(`/admin/tasks/${id}/cancel`),
+  offlineAssetsStatus: () => api.get('/admin/offline-assets/status'),
+  checkOfflineAssets: () => api.post('/admin/offline-assets/check'),
+  restoreOfflineAssets: () => api.post('/admin/offline-assets/restore'),
+  exportOfflineAssets: () => api.post('/admin/offline-assets/export'),
+  downloadOfflineAssetsExport: () => api.get('/admin/offline-assets/export/download', { responseType: 'blob' }),
 };

@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.database import init_db
+from app.services.babeldoc_assets import get_offline_assets_status
 from app.services.babeldoc_assets import ensure_offline_assets_ready
 from app.services.babeldoc_assets import restore_offline_assets_package
 from app.services.queue import translation_queue
@@ -21,6 +22,7 @@ async def lifespan(app: FastAPI):
     # Startup
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     os.makedirs(settings.OUTPUT_DIR, exist_ok=True)
+    os.makedirs(settings.BABELDOC_OFFLINE_EXPORT_DIR, exist_ok=True)
     if settings.BABELDOC_OFFLINE_ASSETS_PACKAGE:
         await restore_offline_assets_package(settings.BABELDOC_OFFLINE_ASSETS_PACKAGE)
     if settings.BABELDOC_OFFLINE_MODE or settings.BABELDOC_PRECHECK_ASSETS_ON_STARTUP:
@@ -57,8 +59,12 @@ app.include_router(admin.router, prefix="/api")
 
 @app.get("/api/health")
 async def health():
+    assets_status = get_offline_assets_status()
     return {
         "status": "ok",
         "babeldoc_offline_mode": settings.BABELDOC_OFFLINE_MODE,
         "babeldoc_offline_assets_package": bool(settings.BABELDOC_OFFLINE_ASSETS_PACKAGE),
+        "babeldoc_offline_asset_profile": assets_status["profile"],
+        "babeldoc_assets_ready": assets_status["ready"],
+        "babeldoc_assets_missing_files": assets_status["missing_files"],
     }
