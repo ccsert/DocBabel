@@ -44,7 +44,7 @@ class UserUpdate(BaseModel):
 class TaskCreate(BaseModel):
     lang_in: str = "en"
     lang_out: str = "zh"
-    model_id: int | None = None
+    model_id: int
     glossary_id: int | None = None
     pages: str | None = None
     extra_body: dict | None = None

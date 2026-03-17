@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 from app.core.config import settings
 from app.core.database import async_session_factory
 from app.models.models import TranslationTask, TaskStatus, CustomModel, GlossarySet
+from app.services.babeldoc_assets import ensure_offline_assets_ready
 
 logger = logging.getLogger(__name__)
 
@@ -195,29 +196,26 @@ def _do_translation(
     progress_state: _ProgressState,
 ):
     """Synchronous translation using BabelDOC core, runs in thread pool."""
+    if settings.BABELDOC_OFFLINE_MODE:
+        ensure_offline_assets_ready()
+
     from babeldoc.translator.translator import OpenAITranslator
     from babeldoc.glossary import Glossary as BabelGlossary, GlossaryEntry as BabelGlossaryEntry
 
-    # Build translator
-    model_name = settings.DEFAULT_MODEL
-    base_url = None
-    api_key = settings.OPENAI_API_KEY
-    translator_extra_body = {}
-    send_temperature = True
-    reasoning = None
-    disable_thinking = False
-    enable_json_mode = False
+    if model_config is None:
+        raise RuntimeError("当前任务未绑定可用模型，请在页面中选择已配置模型后重试")
 
-    if model_config:
-        model_name = model_config.model_name
-        base_url = model_config.base_url
-        api_key = model_config.api_key
-        send_temperature = model_config.send_temperature
-        reasoning = model_config.reasoning
-        disable_thinking = model_config.disable_thinking
-        enable_json_mode = model_config.enable_json_mode
-        if model_config.extra_body:
-            translator_extra_body.update(model_config.extra_body)
+    # Build translator
+    model_name = model_config.model_name
+    base_url = model_config.base_url
+    api_key = model_config.api_key
+    translator_extra_body = {}
+    send_temperature = model_config.send_temperature
+    reasoning = model_config.reasoning
+    disable_thinking = model_config.disable_thinking
+    enable_json_mode = model_config.enable_json_mode
+    if model_config.extra_body:
+        translator_extra_body.update(model_config.extra_body)
 
     # Merge task-level extra_body (overrides model-level)
     if extra_body:

@@ -65,7 +65,12 @@ export default function TranslatePage() {
 
   useEffect(() => {
     glossariesApi.list().then((r) => setGlossaries(r.data));
-    modelsApi.list().then((r) => setModels(r.data));
+    modelsApi.list().then((r) => {
+      setModels(r.data);
+      if (r.data.length > 0) {
+        setModelId(String(r.data[0].id));
+      }
+    });
   }, []);
 
   const handleDrop = (e: React.DragEvent) => {
@@ -115,6 +120,10 @@ export default function TranslatePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) return;
+    if (!modelId) {
+      setError('请先选择一个已配置模型');
+      return;
+    }
     setError('');
     setLoading(true);
     const formData = buildFormData();
@@ -260,13 +269,17 @@ export default function TranslatePage() {
               title="翻译模型"
               value={modelId}
               onChange={(e) => setModelId(e.target.value)}
+              disabled={models.length === 0}
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              <option value="">默认模型</option>
+              {models.length === 0 && <option value="">暂无可用模型，请先到模型页创建</option>}
               {models.map((m) => (
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}
             </select>
+            {models.length === 0 && (
+              <p className="mt-1 text-xs text-amber-600">请先在“模型”页面创建至少一个模型配置，再提交翻译任务。</p>
+            )}
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700">术语表</label>
@@ -370,7 +383,7 @@ export default function TranslatePage() {
 
         <button
           type="submit"
-          disabled={!file || loading}
+          disabled={!file || !modelId || loading}
           className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
         >
           {loading ? '提交中...' : '开始翻译'}

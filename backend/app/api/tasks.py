@@ -49,6 +49,9 @@ async def _build_effective_model_hash_payload(
     ocr_workaround: bool,
     skip_translation: bool,
 ) -> tuple[dict, int | None]:
+    if not model_id:
+        raise HTTPException(status_code=400, detail="必须选择一个已配置的模型")
+
     glossary_fingerprint = None
     if glossary_id:
         glossary_result = await db.execute(
@@ -65,53 +68,30 @@ async def _build_effective_model_hash_payload(
             "updated_at": glossary.updated_at.isoformat() if glossary.updated_at else None,
         }
 
-    if model_id:
-        result = await db.execute(
-            select(CustomModel)
-            .join(User, User.id == CustomModel.user_id)
-            .where(
-                CustomModel.id == model_id,
-                User.role == UserRole.admin,
-            )
+    result = await db.execute(
+        select(CustomModel)
+        .join(User, User.id == CustomModel.user_id)
+        .where(
+            CustomModel.id == model_id,
+            User.role == UserRole.admin,
         )
-        model = result.scalar_one_or_none()
-        if not model:
-            raise HTTPException(status_code=404, detail="模型配置不存在")
+    )
+    model = result.scalar_one_or_none()
+    if not model:
+        raise HTTPException(status_code=404, detail="模型配置不存在")
 
-        merged_extra_body = dict(model.extra_body or {})
-        if task_extra_body:
-            merged_extra_body.update(task_extra_body)
+    merged_extra_body = dict(model.extra_body or {})
+    if task_extra_body:
+        merged_extra_body.update(task_extra_body)
 
-        return {
-            "model_name": model.model_name,
-            "base_url": model.base_url,
-            "send_temperature": model.send_temperature,
-            "temperature": model.temperature,
-            "reasoning": model.reasoning,
-            "disable_thinking": model.disable_thinking,
-            "enable_json_mode": model.enable_json_mode,
-            "extra_body": merged_extra_body,
-            "glossary": glossary_fingerprint,
-            "custom_system_prompt": custom_system_prompt,
-            "auto_extract_glossary": auto_extract_glossary,
-            "pages": pages,
-            "no_dual": no_dual,
-            "no_mono": no_mono,
-            "use_alternating_pages_dual": use_alternating_pages_dual,
-            "enhance_compatibility": enhance_compatibility,
-            "ocr_workaround": ocr_workaround,
-            "skip_translation": skip_translation,
-        }, model.id
-
-    merged_extra_body = dict(task_extra_body or {})
     return {
-        "model_name": settings.DEFAULT_MODEL,
-        "base_url": None,
-        "send_temperature": True,
-        "temperature": 0.0,
-        "reasoning": None,
-        "disable_thinking": False,
-        "enable_json_mode": False,
+        "model_name": model.model_name,
+        "base_url": model.base_url,
+        "send_temperature": model.send_temperature,
+        "temperature": model.temperature,
+        "reasoning": model.reasoning,
+        "disable_thinking": model.disable_thinking,
+        "enable_json_mode": model.enable_json_mode,
         "extra_body": merged_extra_body,
         "glossary": glossary_fingerprint,
         "custom_system_prompt": custom_system_prompt,
@@ -123,7 +103,7 @@ async def _build_effective_model_hash_payload(
         "enhance_compatibility": enhance_compatibility,
         "ocr_workaround": ocr_workaround,
         "skip_translation": skip_translation,
-    }, None
+    }, model.id
 
 
 def _normalize_date_param(value: str | None, end_of_day: bool = False) -> datetime | None:
@@ -166,7 +146,7 @@ async def create_task(
     file: UploadFile = File(...),
     lang_in: str = Form("en"),
     lang_out: str = Form("zh"),
-    model_id: int | None = Form(None),
+    model_id: int = Form(...),
     glossary_id: int | None = Form(None),
     pages: str | None = Form(None),
     extra_body: str | None = Form(None),

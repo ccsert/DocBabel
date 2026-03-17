@@ -20,10 +20,11 @@ class Settings(BaseSettings):
     MAX_CONCURRENT_TRANSLATIONS: int = 2
     MAX_QUEUE_SIZE: int = 100
 
-    # Default translation settings
+    # Translation settings
     DEFAULT_QPS: int = 4
-    DEFAULT_MODEL: str = "gpt-4o-mini"
-    OPENAI_API_KEY: str = ""
+    BABELDOC_OFFLINE_MODE: bool = False
+    BABELDOC_OFFLINE_ASSETS_PACKAGE: str | None = None
+    BABELDOC_PRECHECK_ASSETS_ON_STARTUP: bool = False
 
     class Config:
         env_file = ".env"
