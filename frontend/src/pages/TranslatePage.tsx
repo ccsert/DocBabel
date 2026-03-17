@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { tasksApi, glossariesApi, modelsApi } from '../api';
-import { Upload, FileUp, Settings2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Upload, FileUp, Settings2, ChevronDown, ChevronUp, Eye, Download } from 'lucide-react';
 
 interface SelectOption {
   id: number;
@@ -83,15 +83,26 @@ export default function TranslatePage() {
   const triggerDownload = async (taskId: number, type: 'mono' | 'dual') => {
     const token = localStorage.getItem('token');
     const url = tasksApi.downloadUrl(taskId, type);
-    const a = document.createElement('a');
-    a.download = '';
     const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!resp.ok) throw new Error('下载失败');
     const blob = await resp.blob();
     const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
     a.href = objUrl;
+    const stem = file?.name.replace(/\.[^.]+$/, '') || 'document';
+    a.download = `${stem}_${type === 'mono' ? '译文' : '双语'}.pdf`;
     a.click();
     URL.revokeObjectURL(objUrl);
+  };
+
+  const triggerPreview = async (taskId: number, type: 'mono' | 'dual') => {
+    const token = localStorage.getItem('token');
+    const url = tasksApi.downloadUrl(taskId, type);
+    const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!resp.ok) throw new Error('预览失败');
+    const blob = new Blob([await resp.blob()], { type: 'application/pdf' });
+    const objUrl = URL.createObjectURL(blob);
+    window.open(objUrl, '_blank');
   };
 
   const buildFormData = (opts?: { reuseExisting?: boolean; forceRegenerate?: boolean }) => {
@@ -410,7 +421,29 @@ export default function TranslatePage() {
             </div>
             <div className="px-6 py-4 text-sm text-gray-700 space-y-2">
               <p>已有任务 ID: {duplicateInfo.existingTaskId}</p>
-              <p>可下载文件: {duplicateInfo.hasMono ? '译文 PDF ' : ''}{duplicateInfo.hasDual ? '双语 PDF' : ''}</p>
+              <p>可用文件: {duplicateInfo.hasMono ? '译文 PDF ' : ''}{duplicateInfo.hasDual ? '双语 PDF' : ''}</p>
+              <div className="flex items-center gap-2 pt-2">
+                {duplicateInfo.hasMono && (
+                  <div className="inline-flex overflow-hidden rounded-lg border border-gray-300 divide-x divide-gray-300">
+                    <button onClick={() => triggerPreview(duplicateInfo.existingTaskId, 'mono')} title="在新标签页预览译文" className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                      <Eye className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={() => triggerDownload(duplicateInfo.existingTaskId, 'mono')} title="下载译文 PDF" className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                      <Download className="h-3.5 w-3.5" />译文
+                    </button>
+                  </div>
+                )}
+                {duplicateInfo.hasDual && (
+                  <div className="inline-flex overflow-hidden rounded-lg border border-gray-300 divide-x divide-gray-300">
+                    <button onClick={() => triggerPreview(duplicateInfo.existingTaskId, 'dual')} title="在新标签页预览双语文档" className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                      <Eye className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={() => triggerDownload(duplicateInfo.existingTaskId, 'dual')} title="下载双语 PDF" className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                      <Download className="h-3.5 w-3.5" />双语
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-3 border-t border-gray-100 px-6 py-4">
               <button

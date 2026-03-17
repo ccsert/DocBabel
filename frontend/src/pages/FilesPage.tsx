@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { filesApi, tasksApi } from '../api';
-import { Archive, Calendar, Download, Search } from 'lucide-react';
+import { Archive, Calendar, Download, Eye, Search } from 'lucide-react';
 
 interface FileItem {
   file_hash: string;
@@ -54,18 +54,37 @@ export default function FilesPage() {
     [files],
   );
 
-  const handleDownload = (taskId: number, type: 'mono' | 'dual') => {
+  const handleDownload = async (taskId: number, type: 'mono' | 'dual', filename: string) => {
     const token = localStorage.getItem('token');
     const url = tasksApi.downloadUrl(taskId, type);
-    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.blob())
-      .then((blob) => {
-        const obj = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = obj;
-        a.click();
-        URL.revokeObjectURL(obj);
-      });
+    try {
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!r.ok) throw new Error('下载失败');
+      const blob = await r.blob();
+      const obj = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = obj;
+      const stem = filename.replace(/\.[^.]+$/, '');
+      a.download = `${stem}_${type === 'mono' ? '译文' : '双语'}.pdf`;
+      a.click();
+      URL.revokeObjectURL(obj);
+    } catch {
+      alert('文件下载失败，请重试');
+    }
+  };
+
+  const handlePreview = async (taskId: number, type: 'mono' | 'dual') => {
+    const token = localStorage.getItem('token');
+    const url = tasksApi.downloadUrl(taskId, type);
+    try {
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!r.ok) throw new Error('预览失败');
+      const blob = new Blob([await r.blob()], { type: 'application/pdf' });
+      const u = URL.createObjectURL(blob);
+      window.open(u, '_blank');
+    } catch {
+      alert('文件预览失败，请重试');
+    }
   };
 
   return (
@@ -122,14 +141,24 @@ export default function FilesPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   {item.output_mono_filename && (
-                    <button onClick={() => handleDownload(item.latest_task_id, 'mono')} className="flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50">
-                      <Download className="h-3.5 w-3.5" />译文
-                    </button>
+                    <div className="inline-flex overflow-hidden rounded-lg border border-gray-300 divide-x divide-gray-300">
+                      <button onClick={() => handlePreview(item.latest_task_id, 'mono')} title="在新标签页预览译文" className="flex items-center gap-1 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                        <Eye className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={() => handleDownload(item.latest_task_id, 'mono', item.original_filename)} title="下载译文 PDF" className="flex items-center gap-1 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                        <Download className="h-3.5 w-3.5" />译文
+                      </button>
+                    </div>
                   )}
                   {item.output_dual_filename && (
-                    <button onClick={() => handleDownload(item.latest_task_id, 'dual')} className="flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50">
-                      <Download className="h-3.5 w-3.5" />双语
-                    </button>
+                    <div className="inline-flex overflow-hidden rounded-lg border border-gray-300 divide-x divide-gray-300">
+                      <button onClick={() => handlePreview(item.latest_task_id, 'dual')} title="在新标签页预览双语文档" className="flex items-center gap-1 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                        <Eye className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={() => handleDownload(item.latest_task_id, 'dual', item.original_filename)} title="下载双语 PDF" className="flex items-center gap-1 px-2.5 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                        <Download className="h-3.5 w-3.5" />双语
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

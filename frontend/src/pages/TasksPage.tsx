@@ -13,6 +13,7 @@ import {
   BookOpen,
   Trash2,
   Search,
+  Eye,
 } from 'lucide-react';
 
 interface ApiErrorLike {
@@ -156,18 +157,37 @@ export default function TasksPage() {
     }
   };
 
-  const handleDownload = (id: number, type: 'mono' | 'dual') => {
+  const handleDownload = async (id: number, type: 'mono' | 'dual', filename: string) => {
     const token = localStorage.getItem('token');
     const url = tasksApi.downloadUrl(id, type);
-    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.blob())
-      .then((blob) => {
-        const u = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = u;
-        a.click();
-        URL.revokeObjectURL(u);
-      });
+    try {
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!r.ok) throw new Error('下载失败');
+      const blob = await r.blob();
+      const u = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = u;
+      const stem = filename.replace(/\.[^.]+$/, '');
+      a.download = `${stem}_${type === 'mono' ? '译文' : '双语'}.pdf`;
+      a.click();
+      URL.revokeObjectURL(u);
+    } catch {
+      alert('文件下载失败，请重试');
+    }
+  };
+
+  const handlePreview = async (id: number, type: 'mono' | 'dual') => {
+    const token = localStorage.getItem('token');
+    const url = tasksApi.downloadUrl(id, type);
+    try {
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!r.ok) throw new Error('预览失败');
+      const blob = new Blob([await r.blob()], { type: 'application/pdf' });
+      const u = URL.createObjectURL(blob);
+      window.open(u, '_blank');
+    } catch {
+      alert('文件预览失败，请重试');
+    }
   };
 
   return (
@@ -264,10 +284,24 @@ export default function TasksPage() {
 
                       <div className="flex flex-wrap items-center justify-end gap-2">
                         {task.status === 'completed' && task.output_mono_filename && (
-                          <button onClick={() => handleDownload(task.id, 'mono')} className="flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"><Download className="h-3.5 w-3.5" />译文</button>
+                          <div className="inline-flex overflow-hidden rounded-lg border border-gray-300 divide-x divide-gray-300">
+                            <button onClick={() => handlePreview(task.id, 'mono')} title="在新标签页预览译文" className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                              <Eye className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => handleDownload(task.id, 'mono', task.original_filename)} title="下载译文 PDF" className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                              <Download className="h-3.5 w-3.5" />译文
+                            </button>
+                          </div>
                         )}
                         {task.status === 'completed' && task.output_dual_filename && (
-                          <button onClick={() => handleDownload(task.id, 'dual')} className="flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"><Download className="h-3.5 w-3.5" />双语</button>
+                          <div className="inline-flex overflow-hidden rounded-lg border border-gray-300 divide-x divide-gray-300">
+                            <button onClick={() => handlePreview(task.id, 'dual')} title="在新标签页预览双语文档" className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                              <Eye className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => handleDownload(task.id, 'dual', task.original_filename)} title="下载双语 PDF" className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                              <Download className="h-3.5 w-3.5" />双语
+                            </button>
+                          </div>
                         )}
                         {task.status === 'completed' && task.extracted_glossary_data && task.extracted_glossary_data.length > 0 && (
                           <button onClick={() => openSaveModal(task)} className="flex items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100"><Sparkles className="h-3.5 w-3.5" />保存术语表 ({task.extracted_glossary_data.length})</button>
