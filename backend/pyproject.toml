@@ -2,7 +2,6 @@
 name = "babeldoc-web"
 version = "0.1.0"
 description = "BabelDOC Web - 基于 BabelDOC 核心引擎的 Web 翻译平台"
-readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.0",
@@ -27,6 +26,9 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
 ]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
 
 [tool.uv]
 dev-dependencies = [
