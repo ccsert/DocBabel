@@ -7,7 +7,7 @@ COPY frontend/ .
 RUN npm run build
 
 # ── Stage 2: All-in-one runtime ──────────────────────────────────────
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         postgresql-15 \
