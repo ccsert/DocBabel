@@ -20,6 +20,7 @@ env:
   REGISTRY: ghcr.io
   BACKEND_IMAGE: babeldoc-backend
   FRONTEND_IMAGE: babeldoc-frontend
+  ALLINONE_IMAGE: babeldoc-allinone
 
 jobs:
   build-offline-package:
@@ -142,6 +143,41 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # ── Build all-in-one base image ──────────────────────────────────
+      - name: Build all-in-one base image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/allinone/Dockerfile
+          load: true
+          tags: ${{ env.ALLINONE_IMAGE }}:base
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build offline all-in-one image with bundled assets
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          OWNER="${{ steps.owner.outputs.value }}"
+          mkdir -p /tmp/allinone-offline-build
+          cp backend/offline-assets-export/offline_assets_*.zip /tmp/allinone-offline-build/
+
+          cat > /tmp/allinone-offline-build/Dockerfile << 'EOF'
+          FROM babeldoc-allinone:base
+          RUN mkdir -p /app/bundled-offline-assets
+          COPY offline_assets_*.zip /app/bundled-offline-assets/
+          ENV BABELDOC_OFFLINE_MODE=true
+          ENV BABELDOC_OFFLINE_ASSETS_PACKAGE=/app/bundled-offline-assets
+          ENV BABELDOC_OFFLINE_ASSET_PROFILE=full
+          ENV BABELDOC_PRECHECK_ASSETS_ON_STARTUP=true
+          EOF
+
+          docker build \
+            -t ${{ env.ALLINONE_IMAGE }}:${VERSION} \
+            -t ${{ env.ALLINONE_IMAGE }}:latest \
+            -t ${{ env.REGISTRY }}/${OWNER}/${{ env.ALLINONE_IMAGE }}:${VERSION} \
+            -t ${{ env.REGISTRY }}/${OWNER}/${{ env.ALLINONE_IMAGE }}:latest \
+            /tmp/allinone-offline-build
+
       # ── Pull dependency images ───────────────────────────────────────
       - name: Pull dependency images
         run: |
@@ -172,6 +208,12 @@ jobs:
           echo "Saving redis image..."
           docker save redis:7-alpine | gzip > package/images/redis.tar.gz
 
+          echo "Saving all-in-one image (with bundled offline assets)..."
+          docker save \
+            ${{ env.REGISTRY }}/${OWNER}/${{ env.ALLINONE_IMAGE }}:${VERSION} \
+            ${{ env.REGISTRY }}/${OWNER}/${{ env.ALLINONE_IMAGE }}:latest \
+            | gzip > package/images/babeldoc-allinone.tar.gz
+
       # ── Assemble offline package ─────────────────────────────────────
       - name: Assemble offline package
         run: |
@@ -179,6 +221,7 @@ jobs:
 
           # Copy docker-compose and scripts
           cp docker-compose.yml package/
+          cp docker-compose.allinone.yml package/
           cp scripts/install.sh package/
           chmod +x package/install.sh
 
@@ -307,3 +350,11 @@ jobs:
           OWNER="${{ steps.owner.outputs.value }}"
           docker push ${{ env.REGISTRY }}/${OWNER}/${{ env.FRONTEND_IMAGE }}:${VERSION}
           docker push ${{ env.REGISTRY }}/${OWNER}/${{ env.FRONTEND_IMAGE }}:latest
+
+      - name: Push all-in-one image to ghcr.io
+        if: github.ref_type == 'tag'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          OWNER="${{ steps.owner.outputs.value }}"
+          docker push ${{ env.REGISTRY }}/${OWNER}/${{ env.ALLINONE_IMAGE }}:${VERSION}
+          docker push ${{ env.REGISTRY }}/${OWNER}/${{ env.ALLINONE_IMAGE }}:latest

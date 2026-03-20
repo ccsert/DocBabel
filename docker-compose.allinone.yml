@@ -1,0 +1,35 @@
+# All-in-one single container deployment
+# PostgreSQL + Backend + Nginx (Frontend) bundled in one image
+#
+# Usage:
+#   docker compose -f docker-compose.allinone.yml pull
+#   docker compose -f docker-compose.allinone.yml up -d
+#
+# Or build from source:
+#   docker compose -f docker-compose.allinone.yml up -d --build
+
+services:
+  babeldoc:
+    image: ghcr.io/ccsert/babeldoc-allinone:latest
+    build:
+      context: .
+      dockerfile: docker/allinone/Dockerfile
+    container_name: babeldoc
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - babeldoc_data:/data
+    environment:
+      # Auto-generated and persisted to volume if not set
+      SECRET_KEY: ${SECRET_KEY:-}
+      # Translation settings
+      MAX_CONCURRENT_TRANSLATIONS: ${MAX_CONCURRENT_TRANSLATIONS:-2}
+      # Offline mode (set to true and mount assets package to use offline)
+      BABELDOC_OFFLINE_MODE: ${BABELDOC_OFFLINE_MODE:-false}
+      BABELDOC_OFFLINE_ASSETS_PACKAGE: ${BABELDOC_OFFLINE_ASSETS_PACKAGE:-}
+      BABELDOC_OFFLINE_ASSET_PROFILE: ${BABELDOC_OFFLINE_ASSET_PROFILE:-full}
+      BABELDOC_PRECHECK_ASSETS_ON_STARTUP: ${BABELDOC_PRECHECK_ASSETS_ON_STARTUP:-false}
+
+volumes:
+  babeldoc_data:

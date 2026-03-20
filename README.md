@@ -71,13 +71,15 @@ A web platform for PDF document translation, powered by the [BabelDOC](https://g
 
 ### Docker deployment (recommended)
 
+**All-in-one** — single container, single port:
+
 ```bash
-wget -O docker-compose.yml https://github.com/ccsert/DocBabel/raw/main/docker-compose.yml
-docker compose pull
-docker compose up -d
+wget -O docker-compose.allinone.yml https://github.com/ccsert/DocBabel/raw/main/docker-compose.allinone.yml
+docker compose -f docker-compose.allinone.yml pull
+docker compose -f docker-compose.allinone.yml up -d
 ```
 
-Pulls pre-built images from ghcr.io and starts all services. Visit `http://localhost` when ready.
+Visit `http://localhost` when ready.
 
 ### Local development
 
@@ -111,30 +113,38 @@ By default, the frontend runs at `http://localhost:5173` and the backend at `htt
 
 ## Docker Deployment
 
-### Online all-in-one (recommended)
+### All-in-one single container
 
-No need to clone the repository. Pull pre-built images from ghcr.io and start:
+PostgreSQL, backend, and frontend bundled into **one image**, exposing only port 80. No inter-container networking, no port conflicts:
 
 ```bash
-# Download only the compose file
-wget -O docker-compose.yml https://github.com/ccsert/DocBabel/raw/main/docker-compose.yml
+wget -O docker-compose.allinone.yml https://github.com/ccsert/DocBabel/raw/main/docker-compose.allinone.yml
+docker compose -f docker-compose.allinone.yml pull
+docker compose -f docker-compose.allinone.yml up -d
+```
 
-# Pull images and start all services
+Best for: single-host VMs, quick demos, environments where you want minimal moving parts.
+
+### Multi-container (online all-in-one)
+
+Separate containers for PostgreSQL, Redis, backend, and frontend. Pull pre-built images:
+
+```bash
+wget -O docker-compose.yml https://github.com/ccsert/DocBabel/raw/main/docker-compose.yml
 docker compose pull
 docker compose up -d
 ```
-
-Visit `http://localhost` when ready.
 
 ### Build from source
 
 ```bash
 git clone https://github.com/ccsert/DocBabel.git
 cd DocBabel
+# Multi-container
 docker compose up -d --build
+# Or all-in-one
+docker compose -f docker-compose.allinone.yml up -d --build
 ```
-
-This builds and starts all 4 services (PostgreSQL, Redis, backend, frontend).
 
 ### Offline installation package
 

@@ -71,13 +71,15 @@ BabelDOC Web 是一个面向 PDF 文档翻译场景的 Web 平台，基于 [Babe
 
 ### Docker 部署（推荐）
 
+**All-in-one** — 单容器，单端口：
+
 ```bash
-wget -O docker-compose.yml https://github.com/ccsert/DocBabel/raw/main/docker-compose.yml
-docker compose pull
-docker compose up -d
+wget -O docker-compose.allinone.yml https://github.com/ccsert/DocBabel/raw/main/docker-compose.allinone.yml
+docker compose -f docker-compose.allinone.yml pull
+docker compose -f docker-compose.allinone.yml up -d
 ```
 
-拉取 ghcr.io 预构建镜像并启动全部服务，启动后访问 `http://localhost`。
+启动后访问 `http://localhost`。
 
 ### 本地开发
 
@@ -111,30 +113,39 @@ npm run dev
 
 ## Docker 部署
 
-### 在线一键部署（推荐）
+### All-in-one 单容器
 
-无需克隆仓库，仅需下载 Compose 文件，拉取 ghcr.io 预构建镜像即可启动：
+PostgreSQL、后端、前端全部打入**一个镜像**，仅暴露 80 端口，无内部网络不兼容问题：
 
 ```bash
-# 仅下载 Compose 文件
-wget -O docker-compose.yml https://github.com/ccsert/DocBabel/raw/main/docker-compose.yml
+wget -O docker-compose.allinone.yml https://github.com/ccsert/DocBabel/raw/main/docker-compose.allinone.yml
+docker compose -f docker-compose.allinone.yml pull
+docker compose -f docker-compose.allinone.yml up -d
+```
 
-# 拉取镜像并启动全部服务
+适用于：单机部署、快速演示、希望减少组件数量的场景。
+
+### 多容器（在线一键部署）
+
+PostgreSQL、Redis、后端、前端分别装入不同容器，拉取预构建镜像：
+
+```bash
+wget -O docker-compose.yml https://github.com/ccsert/DocBabel/raw/main/docker-compose.yml
 docker compose pull
 docker compose up -d
 ```
-
-启动后访问 `http://localhost`。
 
 ### 源码构建
 
 ```bash
 git clone https://github.com/ccsert/DocBabel.git
 cd DocBabel
-docker compose up -d --build
-```
+# 多容器
 
-将构建并启动全部 4 个服务（PostgreSQL、Redis、后端、前端）。
+docker compose up -d --build
+# 或 all-in-one
+docker compose -f docker-compose.allinone.yml up -d --build
+```
 
 ### 从 GitHub Container Registry 拉取
 
