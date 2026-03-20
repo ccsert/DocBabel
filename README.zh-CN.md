@@ -72,10 +72,12 @@ BabelDOC Web 是一个面向 PDF 文档翻译场景的 Web 平台，基于 [Babe
 ### Docker 部署（推荐）
 
 ```bash
-docker compose up -d --build
+wget -O docker-compose.yml https://github.com/ccsert/DocBabel/raw/main/docker-compose.yml
+docker compose pull
+docker compose up -d
 ```
 
-将构建并启动全部 4 个服务（PostgreSQL、Redis、后端、前端），启动后访问 `http://localhost`。
+拉取 ghcr.io 预构建镜像并启动全部服务，启动后访问 `http://localhost`。
 
 ### 本地开发
 
@@ -109,13 +111,30 @@ npm run dev
 
 ## Docker 部署
 
-### 一键部署
+### 在线一键部署（推荐）
+
+无需克隆仓库，仅需下载 Compose 文件，拉取 ghcr.io 预构建镜像即可启动：
 
 ```bash
+# 仅下载 Compose 文件
+wget -O docker-compose.yml https://github.com/ccsert/DocBabel/raw/main/docker-compose.yml
+
+# 拉取镜像并启动全部服务
+docker compose pull
+docker compose up -d
+```
+
+启动后访问 `http://localhost`。
+
+### 源码构建
+
+```bash
+git clone https://github.com/ccsert/DocBabel.git
+cd DocBabel
 docker compose up -d --build
 ```
 
-将构建并启动全部 4 个服务（PostgreSQL、Redis、后端、前端），启动后访问 `http://localhost`。
+将构建并启动全部 4 个服务（PostgreSQL、Redis、后端、前端）。
 
 ### 从 GitHub Container Registry 拉取
 

@@ -46,6 +46,10 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Building version: ${VERSION}"
 
+      - name: Set lowercase owner
+        id: owner
+        run: echo "value=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
       # ── Generate offline assets first ────────────────────────────────
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -116,9 +120,13 @@ jobs:
           ENV BABELDOC_PRECHECK_ASSETS_ON_STARTUP=true
           EOF
 
-          docker build -t ${{ env.BACKEND_IMAGE }}:${VERSION} \
-                       -t ${{ env.BACKEND_IMAGE }}:latest \
-                       /tmp/offline-build
+          OWNER="${{ steps.owner.outputs.value }}"
+          docker build \
+            -t ${{ env.BACKEND_IMAGE }}:${VERSION} \
+            -t ${{ env.BACKEND_IMAGE }}:latest \
+            -t ${{ env.REGISTRY }}/${OWNER}/${{ env.BACKEND_IMAGE }}:${VERSION} \
+            -t ${{ env.REGISTRY }}/${OWNER}/${{ env.BACKEND_IMAGE }}:latest \
+            /tmp/offline-build
 
       - name: Build frontend image
         uses: docker/build-push-action@v6
@@ -129,6 +137,8 @@ jobs:
           tags: |
             ${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.version }}
             ${{ env.FRONTEND_IMAGE }}:latest
+            ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ steps.owner.outputs.value }}/${{ env.FRONTEND_IMAGE }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -141,15 +151,19 @@ jobs:
       # ── Save Docker images to tar ───────────────────────────────────
       - name: Save Docker images
         run: |
+          OWNER="${{ steps.owner.outputs.value }}"
+          VERSION="${{ steps.version.outputs.version }}"
           mkdir -p package/images
           echo "Saving backend image (with bundled offline assets)..."
-          docker save ${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.version }} \
-                      ${{ env.BACKEND_IMAGE }}:latest \
+          docker save \
+            ${{ env.REGISTRY }}/${OWNER}/${{ env.BACKEND_IMAGE }}:${VERSION} \
+            ${{ env.REGISTRY }}/${OWNER}/${{ env.BACKEND_IMAGE }}:latest \
             | gzip > package/images/babeldoc-backend.tar.gz
 
           echo "Saving frontend image..."
-          docker save ${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.version }} \
-                      ${{ env.FRONTEND_IMAGE }}:latest \
+          docker save \
+            ${{ env.REGISTRY }}/${OWNER}/${{ env.FRONTEND_IMAGE }}:${VERSION} \
+            ${{ env.REGISTRY }}/${OWNER}/${{ env.FRONTEND_IMAGE }}:latest \
             | gzip > package/images/babeldoc-frontend.tar.gz
 
           echo "Saving postgres image..."
@@ -278,22 +292,18 @@ jobs:
             ```
 
       # ── Push images to GitHub Container Registry ─────────────────────
-      - name: Tag and push backend image to ghcr.io
+      - name: Push backend image to ghcr.io
         if: github.ref_type == 'tag'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          OWNER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
-          docker tag ${{ env.BACKEND_IMAGE }}:${VERSION} ${{ env.REGISTRY }}/${OWNER}/${{ env.BACKEND_IMAGE }}:${VERSION}
-          docker tag ${{ env.BACKEND_IMAGE }}:latest ${{ env.REGISTRY }}/${OWNER}/${{ env.BACKEND_IMAGE }}:latest
+          OWNER="${{ steps.owner.outputs.value }}"
           docker push ${{ env.REGISTRY }}/${OWNER}/${{ env.BACKEND_IMAGE }}:${VERSION}
           docker push ${{ env.REGISTRY }}/${OWNER}/${{ env.BACKEND_IMAGE }}:latest
 
-      - name: Tag and push frontend image to ghcr.io
+      - name: Push frontend image to ghcr.io
         if: github.ref_type == 'tag'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          OWNER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
-          docker tag ${{ env.FRONTEND_IMAGE }}:${VERSION} ${{ env.REGISTRY }}/${OWNER}/${{ env.FRONTEND_IMAGE }}:${VERSION}
-          docker tag ${{ env.FRONTEND_IMAGE }}:latest ${{ env.REGISTRY }}/${OWNER}/${{ env.FRONTEND_IMAGE }}:latest
+          OWNER="${{ steps.owner.outputs.value }}"
           docker push ${{ env.REGISTRY }}/${OWNER}/${{ env.FRONTEND_IMAGE }}:${VERSION}
           docker push ${{ env.REGISTRY }}/${OWNER}/${{ env.FRONTEND_IMAGE }}:latest

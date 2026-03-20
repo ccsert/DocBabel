@@ -72,10 +72,12 @@ A web platform for PDF document translation, powered by the [BabelDOC](https://g
 ### Docker deployment (recommended)
 
 ```bash
-docker compose up -d --build
+wget -O docker-compose.yml https://github.com/ccsert/DocBabel/raw/main/docker-compose.yml
+docker compose pull
+docker compose up -d
 ```
 
-This builds and starts all 4 services (PostgreSQL, Redis, backend, frontend). Visit `http://localhost` when ready.
+Pulls pre-built images from ghcr.io and starts all services. Visit `http://localhost` when ready.
 
 ### Local development
 
@@ -109,22 +111,30 @@ By default, the frontend runs at `http://localhost:5173` and the backend at `htt
 
 ## Docker Deployment
 
-### One-command deploy
+### Online all-in-one (recommended)
+
+No need to clone the repository. Pull pre-built images from ghcr.io and start:
 
 ```bash
+# Download only the compose file
+wget -O docker-compose.yml https://github.com/ccsert/DocBabel/raw/main/docker-compose.yml
+
+# Pull images and start all services
+docker compose pull
+docker compose up -d
+```
+
+Visit `http://localhost` when ready.
+
+### Build from source
+
+```bash
+git clone https://github.com/ccsert/DocBabel.git
+cd DocBabel
 docker compose up -d --build
 ```
 
-This builds and starts all 4 services (PostgreSQL, Redis, backend, frontend). Visit `http://localhost` when ready.
-
-### Pull from GitHub Container Registry
-
-Pre-built images (with offline assets bundled) are published on every release:
-
-```bash
-docker pull ghcr.io/ccsert/babeldoc-backend:latest
-docker pull ghcr.io/ccsert/babeldoc-frontend:latest
-```
+This builds and starts all 4 services (PostgreSQL, Redis, backend, frontend).
 
 ### Offline installation package
 
