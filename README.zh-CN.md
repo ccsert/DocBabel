@@ -69,26 +69,34 @@ BabelDOC Web 是一个面向 PDF 文档翻译场景的 Web 平台，基于 [Babe
 
 ## 快速开始
 
-### 1. 启动基础服务
+### Docker 部署（推荐）
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
-默认会启动 PostgreSQL 和 Redis。
+将构建并启动全部 4 个服务（PostgreSQL、Redis、后端、前端），启动后访问 `http://localhost`。
 
-### 2. 启动后端
+### 本地开发
+
+**1. 启动基础服务（仅 PostgreSQL + Redis）**
+
+```bash
+docker compose up -d postgres redis
+```
+
+**2. 启动后端**
 
 ```bash
 cd backend
 
+cp .env.example .env
 uv sync
 uv run alembic upgrade head
-cp .env.example .env
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 3. 启动前端
+**3. 启动前端**
 
 ```bash
 cd frontend

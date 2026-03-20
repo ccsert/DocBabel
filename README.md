@@ -69,26 +69,34 @@ A web platform for PDF document translation, powered by the [BabelDOC](https://g
 
 ## Quick Start
 
-### 1. Start infrastructure
+### Docker deployment (recommended)
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
-This starts PostgreSQL and Redis with the default local setup.
+This builds and starts all 4 services (PostgreSQL, Redis, backend, frontend). Visit `http://localhost` when ready.
 
-### 2. Start backend
+### Local development
+
+**1. Start infrastructure (PostgreSQL + Redis only)**
+
+```bash
+docker compose up -d postgres redis
+```
+
+**2. Start backend**
 
 ```bash
 cd backend
 
+cp .env.example .env
 uv sync
 uv run alembic upgrade head
-cp .env.example .env
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 3. Start frontend
+**3. Start frontend**
 
 ```bash
 cd frontend
