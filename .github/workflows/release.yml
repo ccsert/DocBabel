@@ -114,7 +114,7 @@ jobs:
           cat > /tmp/offline-build/Dockerfile << 'EOF'
           FROM babeldoc-backend:base
           COPY offline_assets.zip /tmp/offline_assets.zip
-          RUN python3 -c "import asyncio; from babeldoc.assets.assets import restore_offline_assets_package_async; asyncio.run(restore_offline_assets_package_async('/tmp/offline_assets.zip'))" && rm /tmp/offline_assets.zip
+          RUN python3 -c "import asyncio; from pathlib import Path; from babeldoc.assets.assets import restore_offline_assets_package_async; asyncio.run(restore_offline_assets_package_async(Path('/tmp/offline_assets.zip')))" && rm /tmp/offline_assets.zip
           ENV BABELDOC_OFFLINE_MODE=true
           ENV BABELDOC_OFFLINE_ASSET_PROFILE=full
           ENV BABELDOC_PRECHECK_ASSETS_ON_STARTUP=true
@@ -163,7 +163,7 @@ jobs:
           cat > /tmp/allinone-offline-build/Dockerfile << 'EOF'
           FROM babeldoc-allinone:base
           COPY offline_assets.zip /tmp/offline_assets.zip
-          RUN python3 -c "import asyncio; from babeldoc.assets.assets import restore_offline_assets_package_async; asyncio.run(restore_offline_assets_package_async('/tmp/offline_assets.zip'))" && rm /tmp/offline_assets.zip
+          RUN python3 -c "import asyncio; from pathlib import Path; from babeldoc.assets.assets import restore_offline_assets_package_async; asyncio.run(restore_offline_assets_package_async(Path('/tmp/offline_assets.zip')))" && rm /tmp/offline_assets.zip
           ENV BABELDOC_OFFLINE_MODE=true
           ENV BABELDOC_OFFLINE_ASSET_PROFILE=full
           ENV BABELDOC_PRECHECK_ASSETS_ON_STARTUP=true
