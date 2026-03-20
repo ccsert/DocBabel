@@ -109,14 +109,17 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           mkdir -p /tmp/offline-build
-          cp backend/offline-assets-export/offline_assets_*.zip /tmp/offline-build/
+          cp backend/offline-assets-export/offline_assets_*.zip /tmp/offline-build/offline_assets.zip
 
           cat > /tmp/offline-build/Dockerfile << 'EOF'
           FROM babeldoc-backend:base
-          RUN mkdir -p /app/bundled-offline-assets
-          COPY offline_assets_*.zip /app/bundled-offline-assets/
+          COPY offline_assets.zip /tmp/offline_assets.zip
+          RUN python3 -c "
+import asyncio
+from babeldoc.assets.assets import restore_offline_assets_package_async
+asyncio.run(restore_offline_assets_package_async('/tmp/offline_assets.zip'))
+" && rm /tmp/offline_assets.zip
           ENV BABELDOC_OFFLINE_MODE=true
-          ENV BABELDOC_OFFLINE_ASSETS_PACKAGE=/app/bundled-offline-assets
           ENV BABELDOC_OFFLINE_ASSET_PROFILE=full
           ENV BABELDOC_PRECHECK_ASSETS_ON_STARTUP=true
           EOF
@@ -159,14 +162,17 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           OWNER="${{ steps.owner.outputs.value }}"
           mkdir -p /tmp/allinone-offline-build
-          cp backend/offline-assets-export/offline_assets_*.zip /tmp/allinone-offline-build/
+          cp backend/offline-assets-export/offline_assets_*.zip /tmp/allinone-offline-build/offline_assets.zip
 
           cat > /tmp/allinone-offline-build/Dockerfile << 'EOF'
           FROM babeldoc-allinone:base
-          RUN mkdir -p /app/bundled-offline-assets
-          COPY offline_assets_*.zip /app/bundled-offline-assets/
+          COPY offline_assets.zip /tmp/offline_assets.zip
+          RUN python3 -c "
+import asyncio
+from babeldoc.assets.assets import restore_offline_assets_package_async
+asyncio.run(restore_offline_assets_package_async('/tmp/offline_assets.zip'))
+" && rm /tmp/offline_assets.zip
           ENV BABELDOC_OFFLINE_MODE=true
-          ENV BABELDOC_OFFLINE_ASSETS_PACKAGE=/app/bundled-offline-assets
           ENV BABELDOC_OFFLINE_ASSET_PROFILE=full
           ENV BABELDOC_PRECHECK_ASSETS_ON_STARTUP=true
           EOF
@@ -336,7 +342,7 @@ jobs:
 
       # ── Push images to GitHub Container Registry ─────────────────────
       - name: Push backend image to ghcr.io
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           OWNER="${{ steps.owner.outputs.value }}"
@@ -344,7 +350,7 @@ jobs:
           docker push ${{ env.REGISTRY }}/${OWNER}/${{ env.BACKEND_IMAGE }}:latest
 
       - name: Push frontend image to ghcr.io
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           OWNER="${{ steps.owner.outputs.value }}"
@@ -352,7 +358,7 @@ jobs:
           docker push ${{ env.REGISTRY }}/${OWNER}/${{ env.FRONTEND_IMAGE }}:latest
 
       - name: Push all-in-one image to ghcr.io
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           OWNER="${{ steps.owner.outputs.value }}"
