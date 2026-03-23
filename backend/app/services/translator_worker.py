@@ -259,7 +259,7 @@ def _do_translation(
     output_id = uuid.uuid4().hex
 
     from babeldoc.format.pdf.high_level import do_translate, get_translation_stage
-    from babeldoc.format.pdf.translation_config import TranslationConfig
+    from babeldoc.format.pdf.translation_config import TranslationConfig, WatermarkOutputMode
     from babeldoc.progress_monitor import ProgressMonitor
 
     def _progress_callback(**kwargs):
@@ -301,6 +301,7 @@ def _do_translation(
         qps=settings.DEFAULT_QPS,
         use_rich_pbar=False,
         auto_extract_glossary=auto_extract_glossary,
+        watermark_output_mode=WatermarkOutputMode.NoWatermark,
     )
 
     with ProgressMonitor(
