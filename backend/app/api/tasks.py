@@ -176,6 +176,25 @@ async def create_task(
             raise HTTPException(status_code=400, detail="extra_body 必须为有效的 JSON")
 
     content = await file.read()
+
+    # Early check: reject PDFs already translated by BabelDOC
+    import io
+    try:
+        import fitz
+        with fitz.open(stream=content, filetype="pdf") as doc:
+            meta = doc.metadata
+            if meta:
+                producer = meta.get("producer", "") or ""
+                if "BabelDOC" in producer and "Translation_generated_by_AI" in producer:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="该 PDF 已由 BabelDOC 翻译生成，无法对已翻译的文件再次翻译。请上传原始 PDF 文件。",
+                    )
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # If metadata check fails, let the core library handle it later
+
     file_hash = _compute_file_hash(content)
 
     model_hash_payload, normalized_model_id = await _build_effective_model_hash_payload(
