@@ -16,7 +16,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         supervisor \
         build-essential \
         libpq-dev \
-    libxcb1 \
+        libgl1 \
+        libglib2.0-0 \
+        libxcb1 \
+        libsm6 \
+        libxext6 \
+        libxrender1 \
+        libfontconfig1 \
+        libice6 \
         gosu \
     && rm -rf /var/lib/apt/lists/* \
     && rm -f /etc/nginx/sites-enabled/default
