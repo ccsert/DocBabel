@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         supervisor \
         build-essential \
         libpq-dev \
+    libxcb1 \
         gosu \
     && rm -rf /var/lib/apt/lists/* \
     && rm -f /etc/nginx/sites-enabled/default
