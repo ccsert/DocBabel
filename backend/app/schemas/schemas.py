@@ -100,6 +100,34 @@ class TaskListOut(BaseModel):
     total: int
 
 
+class BatchTaskSkippedItemOut(BaseModel):
+    filename: str
+    existing_task_id: int
+    has_mono: bool
+    has_dual: bool
+    reason: str
+
+
+class BatchTaskFailedItemOut(BaseModel):
+    filename: str
+    reason: str
+
+
+class BatchTaskCreateOut(BaseModel):
+    created_tasks: list[TaskOut]
+    skipped_items: list[BatchTaskSkippedItemOut]
+    failed_items: list[BatchTaskFailedItemOut]
+    total_files: int
+    created_count: int
+    skipped_count: int
+    failed_count: int
+
+
+class BatchDownloadRequest(BaseModel):
+    task_ids: list[int] = Field(min_length=1, max_length=100)
+    file_type: str = Field(pattern="^(mono|dual)$")
+
+
 class FileLibraryItemOut(BaseModel):
     file_hash: str
     original_filename: str

@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { tasksApi, glossariesApi, modelsApi } from '../api';
-import { Upload, FileUp, Settings2, ChevronDown, ChevronUp, Eye, Download } from 'lucide-react';
+import { glossariesApi, modelsApi, tasksApi, type BatchCreateResponse } from '../api';
+import { Download, Eye, FileUp, Settings2, Upload, ChevronDown, ChevronUp, X } from 'lucide-react';
 
 interface SelectOption {
   id: number;
@@ -33,7 +33,7 @@ const LANGUAGES = [
 
 export default function TranslatePage() {
   const navigate = useNavigate();
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [langIn, setLangIn] = useState('en');
   const [langOut, setLangOut] = useState('zh');
   const [modelId, setModelId] = useState<string>('');
@@ -61,6 +61,9 @@ export default function TranslatePage() {
   const [glossaries, setGlossaries] = useState<SelectOption[]>([]);
   const [models, setModels] = useState<SelectOption[]>([]);
 
+  const isBatch = files.length > 1;
+  const primaryFile = files[0] ?? null;
+
   const getApiError = (err: unknown) => err as ApiErrorLike;
 
   useEffect(() => {
@@ -73,11 +76,41 @@ export default function TranslatePage() {
     });
   }, []);
 
+  const totalSizeMb = useMemo(
+    () => files.reduce((sum, current) => sum + current.size, 0) / 1024 / 1024,
+    [files],
+  );
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const f = e.dataTransfer.files[0];
-    if (f && f.name.toLowerCase().endsWith('.pdf')) setFile(f);
+    mergeFiles(Array.from(e.dataTransfer.files));
+  };
+
+  const mergeFiles = (incoming: File[]) => {
+    const pdfFiles = incoming.filter((candidate) => candidate.name.toLowerCase().endsWith('.pdf'));
+    if (pdfFiles.length === 0) {
+      setError('仅支持 PDF 文件');
+      return;
+    }
+
+    setFiles((current) => {
+      const next = [...current];
+      for (const candidate of pdfFiles) {
+        const exists = next.some((file) => (
+          file.name === candidate.name
+          && file.size === candidate.size
+          && file.lastModified === candidate.lastModified
+        ));
+        if (!exists) {
+          next.push(candidate);
+        }
+      }
+      return next;
+    });
+    setError('');
+    setDuplicateInfo(null);
+    setRequireConfigChangeForRegenerate(false);
   };
 
   const triggerDownload = async (taskId: number, type: 'mono' | 'dual') => {
@@ -89,7 +122,7 @@ export default function TranslatePage() {
     const objUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = objUrl;
-    const stem = file?.name.replace(/\.[^.]+$/, '') || 'document';
+    const stem = primaryFile?.name.replace(/\.[^.]+$/, '') || 'document';
     a.download = `${stem}_${type === 'mono' ? '译文' : '双语'}.pdf`;
     a.click();
     URL.revokeObjectURL(objUrl);
@@ -105,10 +138,7 @@ export default function TranslatePage() {
     window.open(objUrl, '_blank');
   };
 
-  const buildFormData = (opts?: { reuseExisting?: boolean; forceRegenerate?: boolean }) => {
-    if (!file) return null;
-    const formData = new FormData();
-    formData.append('file', file);
+  const appendSharedFields = (formData: FormData, opts?: { reuseExisting?: boolean; forceRegenerate?: boolean }) => {
     formData.append('lang_in', langIn);
     formData.append('lang_out', langOut);
     if (modelId) formData.append('model_id', modelId);
@@ -125,23 +155,36 @@ export default function TranslatePage() {
     if (opts?.forceRegenerate || requireConfigChangeForRegenerate) {
       formData.append('force_regenerate', 'true');
     }
+  };
+
+  const buildSingleFormData = (opts?: { reuseExisting?: boolean; forceRegenerate?: boolean }) => {
+    if (!primaryFile) return null;
+    const formData = new FormData();
+    formData.append('file', primaryFile);
+    appendSharedFields(formData, opts);
     return formData;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!file) return;
-    if (!modelId) {
-      setError('请先选择一个已配置模型');
-      return;
-    }
-    setError('');
-    setLoading(true);
-    const formData = buildFormData();
-    if (!formData) {
-      setLoading(false);
-      return;
-    }
+  const buildBatchFormData = () => {
+    if (files.length === 0) return null;
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    appendSharedFields(formData);
+    return formData;
+  };
+
+  const summarizeBatchResult = (result: BatchCreateResponse) => ({
+    createdCount: result.created_count,
+    skippedCount: result.skipped_count,
+    failedCount: result.failed_count,
+    skippedItems: result.skipped_items,
+    failedItems: result.failed_items,
+    createdTaskIds: result.created_tasks.map((task) => task.id),
+  });
+
+  const handleSingleSubmit = async () => {
+    const formData = buildSingleFormData();
+    if (!formData) return;
 
     try {
       await tasksApi.create(formData);
@@ -163,13 +206,49 @@ export default function TranslatePage() {
       } else {
         setError(typeof detail === 'string' ? detail : '提交失败');
       }
+    }
+  };
+
+  const handleBatchSubmit = async () => {
+    const formData = buildBatchFormData();
+    if (!formData) return;
+
+    try {
+      const res = await tasksApi.createBatch(formData);
+      const summary = summarizeBatchResult(res.data);
+      if (summary.createdCount === 0 && summary.skippedCount === 0) {
+        setError(summary.failedItems.map((item) => `${item.filename}: ${item.reason}`).slice(0, 3).join('；') || '批量提交失败');
+        return;
+      }
+      navigate('/tasks', { state: { batchSummary: summary } });
+    } catch (err: unknown) {
+      const detail = getApiError(err).response?.data?.detail;
+      setError(typeof detail === 'string' ? detail : '批量提交失败');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (files.length === 0) return;
+    if (!modelId) {
+      setError('请先选择一个已配置模型');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      if (isBatch) {
+        await handleBatchSubmit();
+      } else {
+        await handleSingleSubmit();
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleReuseAndDownload = async () => {
-    const formData = buildFormData({ reuseExisting: true });
+    const formData = buildSingleFormData({ reuseExisting: true });
     if (!formData) return;
     setModalLoading(true);
     setError('');
@@ -197,52 +276,82 @@ export default function TranslatePage() {
     setError('已选择重新生成。请修改任一翻译配置后再次提交，例如术语表、页码、提示词、extra_body、输出选项或模型参数。');
   };
 
+  const removeFileAt = (index: number) => {
+    setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
+    setDuplicateInfo(null);
+  };
+
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-3xl">
       <h1 className="mb-6 text-2xl font-bold text-gray-900">翻译文档</h1>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* File Upload */}
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
-          className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 transition-colors ${
-            dragOver ? 'border-blue-400 bg-blue-50' : 'border-gray-300 bg-white'
-          }`}
+          className={`rounded-xl border-2 border-dashed p-8 transition-colors ${dragOver ? 'border-blue-400 bg-blue-50' : 'border-gray-300 bg-white'}`}
         >
-          {file ? (
-            <div className="text-center">
-              <FileUp className="mx-auto h-10 w-10 text-blue-500" />
-              <p className="mt-2 text-sm font-medium text-gray-900">{file.name}</p>
-              <p className="text-xs text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-              <button
-                type="button"
-                onClick={() => setFile(null)}
-                className="mt-2 text-xs text-red-500 hover:text-red-600"
-              >
-                移除
-              </button>
+          {files.length > 0 ? (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">已选择 {files.length} 个 PDF</p>
+                  <p className="text-xs text-gray-500">总大小 {totalSizeMb.toFixed(2)} MB{isBatch ? '，批量提交会自动跳过已存在译文的文件' : ''}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    添加更多
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => mergeFiles(Array.from(e.target.files || []))}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => { setFiles([]); setDuplicateInfo(null); setRequireConfigChangeForRegenerate(false); }}
+                    className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                  >
+                    清空
+                  </button>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {files.map((currentFile, index) => (
+                  <div key={`${currentFile.name}-${currentFile.size}-${currentFile.lastModified}`} className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                    <FileUp className="mt-0.5 h-5 w-5 text-blue-500" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-gray-900">{currentFile.name}</p>
+                      <p className="text-xs text-gray-500">{(currentFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                    </div>
+                    <button type="button" title="移除文件" aria-label="移除文件" onClick={() => removeFileAt(index)} className="rounded-md p-1 text-gray-400 hover:bg-white hover:text-gray-700">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
-            <label className="cursor-pointer text-center">
-              <Upload className="mx-auto h-10 w-10 text-gray-400" />
+            <label className="flex cursor-pointer flex-col items-center justify-center text-center">
+              <Upload className="h-10 w-10 text-gray-400" />
               <p className="mt-2 text-sm font-medium text-gray-700">
-                拖拽 PDF 文件到此处或{' '}
-                <span className="text-blue-600">点击上传</span>
+                拖拽一个或多个 PDF 到此处，或 <span className="text-blue-600">点击上传</span>
               </p>
-              <p className="mt-1 text-xs text-gray-500">仅支持 PDF 格式</p>
+              <p className="mt-1 text-xs text-gray-500">支持单文件翻译和批量提交</p>
               <input
                 type="file"
                 accept=".pdf"
+                multiple
                 className="hidden"
-                onChange={(e) => e.target.files?.[0] && setFile(e.target.files[0])}
+                onChange={(e) => mergeFiles(Array.from(e.target.files || []))}
               />
             </label>
           )}
         </div>
 
-        {/* Language Selection */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700">源语言</label>
@@ -272,7 +381,6 @@ export default function TranslatePage() {
           </div>
         </div>
 
-        {/* Model & Glossary */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700">翻译模型</label>
@@ -317,7 +425,6 @@ export default function TranslatePage() {
           </div>
         </div>
 
-        {/* Advanced settings */}
         <div className="rounded-xl bg-white ring-1 ring-gray-200">
           <button
             type="button"
@@ -403,14 +510,14 @@ export default function TranslatePage() {
 
         <button
           type="submit"
-          disabled={!file || !modelId || loading}
+          disabled={files.length === 0 || !modelId || loading}
           className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
         >
-          {loading ? '提交中...' : '开始翻译'}
+          {loading ? '提交中...' : isBatch ? `开始批量翻译 (${files.length} 个文件)` : '开始翻译'}
         </button>
       </form>
 
-      {duplicateInfo && (
+      {duplicateInfo && !isBatch && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl">
             <div className="border-b border-gray-100 px-6 py-4">

@@ -26,6 +26,39 @@ api.interceptors.response.use(
 
 export default api;
 
+export type BatchFileType = 'mono' | 'dual';
+
+export interface BatchTaskSkippedItem {
+  filename: string;
+  existing_task_id: number;
+  has_mono: boolean;
+  has_dual: boolean;
+  reason: string;
+}
+
+export interface BatchTaskFailedItem {
+  filename: string;
+  reason: string;
+}
+
+export interface BatchCreatedTask {
+  id: number;
+  original_filename: string;
+  status: string;
+  output_mono_filename: string | null;
+  output_dual_filename: string | null;
+}
+
+export interface BatchCreateResponse {
+  created_tasks: BatchCreatedTask[];
+  skipped_items: BatchTaskSkippedItem[];
+  failed_items: BatchTaskFailedItem[];
+  total_files: number;
+  created_count: number;
+  skipped_count: number;
+  failed_count: number;
+}
+
 // ─── Auth ────────────────────────────────────────────────
 export const authApi = {
   login: (username: string, password: string) =>
@@ -41,6 +74,10 @@ export const tasksApi = {
     api.post('/tasks', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
+  createBatch: (formData: FormData) =>
+    api.post<BatchCreateResponse>('/tasks/batch', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
   list: (params?: { status?: string; q?: string; start_date?: string; end_date?: string; page?: number; page_size?: number }) =>
     api.get('/tasks', { params }),
   get: (id: number) => api.get(`/tasks/${id}`),
@@ -48,6 +85,8 @@ export const tasksApi = {
   delete: (id: number) => api.delete(`/tasks/${id}`),
   downloadUrl: (id: number, fileType: 'mono' | 'dual') =>
     `/api/tasks/${id}/download/${fileType}`,
+  batchDownload: (data: { task_ids: number[]; file_type: BatchFileType }) =>
+    api.post('/tasks/batch-download', data, { responseType: 'blob' }),
   saveGlossary: (id: number, name: string, description?: string) =>
     api.post(`/tasks/${id}/save-glossary`, { name, description }),
 };

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { filesApi, tasksApi } from '../api';
-import { Archive, Calendar, Download, Eye, Search } from 'lucide-react';
+import { filesApi, tasksApi, type BatchFileType } from '../api';
+import { Archive, Calendar, Download, Eye, Search, CheckSquare, Square } from 'lucide-react';
 
 interface FileItem {
   file_hash: string;
@@ -24,12 +24,32 @@ function formatDuration(seconds: number | null) {
   return `${hours} 小时 ${minutes % 60} 分`;
 }
 
+async function getBlobErrorDetail(err: unknown, fallback: string) {
+  const apiError = err as { response?: { data?: Blob } };
+  const blob = apiError.response?.data;
+  if (!(blob instanceof Blob)) return fallback;
+
+  try {
+    const payload = JSON.parse(await blob.text()) as { detail?: string | { message?: string } };
+    if (typeof payload.detail === 'string') return payload.detail;
+    if (payload.detail?.message) return payload.detail.message;
+  } catch {
+    return fallback;
+  }
+
+  return fallback;
+}
+
 export default function FilesPage() {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [q, setQ] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<number>>(new Set());
+  const [batchFileType, setBatchFileType] = useState<BatchFileType>('mono');
+  const [batchDownloading, setBatchDownloading] = useState(false);
+  const [batchError, setBatchError] = useState('');
 
   const fetchFiles = useCallback(async () => {
     setLoading(true);
@@ -53,6 +73,17 @@ export default function FilesPage() {
     () => files.reduce((sum, item) => sum + item.task_count, 0),
     [files],
   );
+
+  const selectableTaskIds = useMemo(
+    () => files
+      .filter((item) => (batchFileType === 'mono' ? Boolean(item.output_mono_filename) : Boolean(item.output_dual_filename)))
+      .map((item) => item.latest_task_id),
+    [batchFileType, files],
+  );
+
+  useEffect(() => {
+    setSelectedTaskIds((current) => new Set(Array.from(current).filter((id) => selectableTaskIds.includes(id))));
+  }, [selectableTaskIds]);
 
   const handleDownload = async (taskId: number, type: 'mono' | 'dual', filename: string) => {
     const token = localStorage.getItem('token');
@@ -84,6 +115,41 @@ export default function FilesPage() {
       window.open(u, '_blank');
     } catch {
       alert('文件预览失败，请重试');
+    }
+  };
+
+  const toggleSelection = (taskId: number) => {
+    setSelectedTaskIds((current) => {
+      const next = new Set(current);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
+  };
+
+  const handleBatchDownload = async () => {
+    if (selectedTaskIds.size === 0) return;
+    setBatchDownloading(true);
+    setBatchError('');
+    try {
+      const response = await tasksApi.batchDownload({
+        task_ids: Array.from(selectedTaskIds),
+        file_type: batchFileType,
+      });
+      const blob = new Blob([response.data], { type: 'application/zip' });
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = `archive_batch_${batchFileType === 'mono' ? '译文' : '双语'}.zip`;
+      anchor.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch (err: unknown) {
+      setBatchError(await getBlobErrorDetail(err, '批量下载失败，请调整选择后重试'));
+    } finally {
+      setBatchDownloading(false);
     }
   };
 
@@ -119,6 +185,31 @@ export default function FilesPage() {
         </button>
       </div>
 
+      <div className="rounded-2xl bg-white p-4 ring-1 ring-gray-200">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-900">批量下载归档文件</p>
+            <p className="mt-1 text-xs text-gray-500">按文件库中的最新版本打包下载。</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select title="批量下载文件类型" value={batchFileType} onChange={(e) => setBatchFileType(e.target.value as BatchFileType)} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
+              <option value="mono">译文 PDF</option>
+              <option value="dual">双语 PDF</option>
+            </select>
+            <button type="button" onClick={() => setSelectedTaskIds(new Set(selectableTaskIds))} disabled={selectableTaskIds.length === 0} className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+              <CheckSquare className="h-4 w-4" />全选当前结果
+            </button>
+            <button type="button" onClick={() => setSelectedTaskIds(new Set())} disabled={selectedTaskIds.size === 0} className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+              <Square className="h-4 w-4" />清空选择
+            </button>
+            <button type="button" onClick={handleBatchDownload} disabled={selectedTaskIds.size === 0 || batchDownloading} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+              {batchDownloading ? '打包中...' : `下载选中 ZIP (${selectedTaskIds.size})`}
+            </button>
+          </div>
+        </div>
+        {batchError && <p className="mt-3 text-sm text-red-600">{batchError}</p>}
+      </div>
+
       {loading ? (
         <div className="rounded-xl bg-white p-12 text-center text-sm text-gray-500 ring-1 ring-gray-200">加载中...</div>
       ) : files.length === 0 ? (
@@ -131,6 +222,16 @@ export default function FilesPage() {
           {files.map((item) => (
             <div key={item.file_hash} className="rounded-2xl bg-white p-5 ring-1 ring-gray-200">
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="md:pt-1">
+                  <input
+                    type="checkbox"
+                    checked={selectedTaskIds.has(item.latest_task_id)}
+                    disabled={batchFileType === 'mono' ? !item.output_mono_filename : !item.output_dual_filename}
+                    onChange={() => toggleSelection(item.latest_task_id)}
+                    title="选择该文件用于批量下载"
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  />
+                </div>
                 <div className="min-w-0 flex-1">
                   <h3 className="truncate text-base font-semibold text-gray-900">{item.original_filename}</h3>
                   <div className="mt-2 flex flex-wrap gap-4 text-xs text-gray-500">
@@ -138,6 +239,8 @@ export default function FilesPage() {
                     <span>累计译文版本 {item.task_count}</span>
                     <span>最近耗时 {formatDuration(item.latest_duration_seconds)}</span>
                   </div>
+                  {batchFileType === 'mono' && !item.output_mono_filename && <p className="mt-2 text-xs text-gray-400">该文件没有可下载的纯译文 PDF</p>}
+                  {batchFileType === 'dual' && !item.output_dual_filename && <p className="mt-2 text-xs text-gray-400">该文件没有可下载的双语 PDF</p>}
                 </div>
                 <div className="flex items-center gap-2">
                   {item.output_mono_filename && (

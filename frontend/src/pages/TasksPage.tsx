@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { tasksApi } from '../api';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { tasksApi, type BatchFileType } from '../api';
 import {
   Clock,
   Loader2,
@@ -14,6 +14,8 @@ import {
   Trash2,
   Search,
   Eye,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 
 interface ApiErrorLike {
@@ -75,8 +77,25 @@ function getErrorDetail(err: unknown, fallback: string) {
   return apiError.response?.data?.detail || fallback;
 }
 
+async function getBlobErrorDetail(err: unknown, fallback: string) {
+  const apiError = err as { response?: { data?: Blob } };
+  const blob = apiError.response?.data;
+  if (!(blob instanceof Blob)) return fallback;
+
+  try {
+    const payload = JSON.parse(await blob.text()) as { detail?: string | { message?: string } };
+    if (typeof payload.detail === 'string') return payload.detail;
+    if (payload.detail?.message) return payload.detail.message;
+  } catch {
+    return fallback;
+  }
+
+  return fallback;
+}
+
 export default function TasksPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -90,6 +109,21 @@ export default function TasksPage() {
   const [glossaryName, setGlossaryName] = useState('');
   const [savingGlossary, setSavingGlossary] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<number>>(new Set());
+  const [batchFileType, setBatchFileType] = useState<BatchFileType>('mono');
+  const [batchDownloading, setBatchDownloading] = useState(false);
+  const [batchError, setBatchError] = useState('');
+
+  const batchSummary = (location.state as {
+    batchSummary?: {
+      createdCount: number;
+      skippedCount: number;
+      failedCount: number;
+      skippedItems: Array<{ filename: string; reason: string }>;
+      failedItems: Array<{ filename: string; reason: string }>;
+      createdTaskIds: number[];
+    };
+  } | null)?.batchSummary;
 
   const fetchTasks = useCallback(async () => {
     const params: Record<string, string | number> = {
@@ -123,6 +157,25 @@ export default function TasksPage() {
     }
     return Array.from(groups.entries());
   }, [tasks]);
+
+  const highlightedTaskIds = useMemo(
+    () => new Set(batchSummary?.createdTaskIds ?? []),
+    [batchSummary],
+  );
+
+  const isSelectable = useCallback((task: Task, fileType: BatchFileType) => {
+    if (task.status !== 'completed') return false;
+    return fileType === 'mono' ? Boolean(task.output_mono_filename) : Boolean(task.output_dual_filename);
+  }, []);
+
+  const selectableTaskIds = useMemo(
+    () => tasks.filter((task) => isSelectable(task, batchFileType)).map((task) => task.id),
+    [batchFileType, isSelectable, tasks],
+  );
+
+  useEffect(() => {
+    setSelectedTaskIds((current) => new Set(Array.from(current).filter((id) => selectableTaskIds.includes(id))));
+  }, [selectableTaskIds]);
 
   const handleCancel = async (id: number) => {
     await tasksApi.cancel(id);
@@ -190,6 +243,45 @@ export default function TasksPage() {
     }
   };
 
+  const toggleTaskSelection = (taskId: number) => {
+    setSelectedTaskIds((current) => {
+      const next = new Set(current);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    setSelectedTaskIds(new Set(selectableTaskIds));
+  };
+
+  const handleBatchDownload = async () => {
+    if (selectedTaskIds.size === 0) return;
+    setBatchDownloading(true);
+    setBatchError('');
+    try {
+      const response = await tasksApi.batchDownload({
+        task_ids: Array.from(selectedTaskIds),
+        file_type: batchFileType,
+      });
+      const blob = new Blob([response.data], { type: 'application/zip' });
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = `batch_download_${batchFileType === 'mono' ? '译文' : '双语'}.zip`;
+      anchor.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch (err: unknown) {
+      setBatchError(await getBlobErrorDetail(err, '批量下载失败，请调整选择后重试'));
+    } finally {
+      setBatchDownloading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
@@ -230,6 +322,44 @@ export default function TasksPage() {
         </div>
       </div>
 
+      {batchSummary && (
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+          <p className="font-medium">批量提交结果</p>
+          <p className="mt-1">已创建 {batchSummary.createdCount} 个任务，跳过 {batchSummary.skippedCount} 个重复文件，失败 {batchSummary.failedCount} 个。</p>
+          {batchSummary.skippedItems.length > 0 && (
+            <p className="mt-2 text-xs text-blue-800">跳过示例：{batchSummary.skippedItems.slice(0, 3).map((item) => item.filename).join('、')}</p>
+          )}
+          {batchSummary.failedItems.length > 0 && (
+            <p className="mt-1 text-xs text-red-600">失败示例：{batchSummary.failedItems.slice(0, 2).map((item) => `${item.filename}（${item.reason}）`).join('；')}</p>
+          )}
+        </div>
+      )}
+
+      <div className="rounded-2xl bg-white p-4 ring-1 ring-gray-200">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-900">批量下载</p>
+            <p className="mt-1 text-xs text-gray-500">仅可选择已完成且存在对应输出文件的任务。</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select title="批量下载文件类型" value={batchFileType} onChange={(e) => setBatchFileType(e.target.value as BatchFileType)} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
+              <option value="mono">译文 PDF</option>
+              <option value="dual">双语 PDF</option>
+            </select>
+            <button type="button" onClick={handleSelectAll} disabled={selectableTaskIds.length === 0} className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+              <CheckSquare className="h-4 w-4" />全选当前结果
+            </button>
+            <button type="button" onClick={() => setSelectedTaskIds(new Set())} disabled={selectedTaskIds.size === 0} className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+              <Square className="h-4 w-4" />清空选择
+            </button>
+            <button type="button" onClick={handleBatchDownload} disabled={selectedTaskIds.size === 0 || batchDownloading} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+              {batchDownloading ? '打包中...' : `下载选中 ZIP (${selectedTaskIds.size})`}
+            </button>
+          </div>
+        </div>
+        {batchError && <p className="mt-3 text-sm text-red-600">{batchError}</p>}
+      </div>
+
       {groupedTasks.length === 0 ? (
         <div className="rounded-xl bg-white p-12 text-center text-sm text-gray-500 ring-1 ring-gray-200">当前筛选条件下暂无任务</div>
       ) : (
@@ -245,9 +375,14 @@ export default function TasksPage() {
               {items.map((task) => {
                 const sc = statusConfig[task.status] || statusConfig.pending;
                 const Icon = sc.icon;
+                const selectable = isSelectable(task, batchFileType);
+                const selected = selectedTaskIds.has(task.id);
                 return (
-                  <div key={task.id} className="rounded-xl bg-white p-5 ring-1 ring-gray-200">
+                  <div key={task.id} className={`rounded-xl bg-white p-5 ring-1 ${highlightedTaskIds.has(task.id) ? 'ring-blue-300' : 'ring-gray-200'}`}>
                     <div className="flex items-start justify-between gap-4">
+                      <div className="pt-1">
+                        <input type="checkbox" checked={selected} disabled={!selectable} onChange={() => toggleTaskSelection(task.id)} title={selectable ? '选择任务用于批量下载' : '当前任务不支持所选下载类型'} className="h-4 w-4 rounded border-gray-300 text-blue-600 disabled:cursor-not-allowed disabled:opacity-40" />
+                      </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-3">
                           <h3 className="truncate text-sm font-medium text-gray-900">{task.original_filename}</h3>
@@ -265,6 +400,9 @@ export default function TasksPage() {
 
                         {task.status === 'queued' && task.queue_position != null && (
                           <p className="mt-2 text-xs text-yellow-600">排队中，当前位置：第 {task.queue_position} 位</p>
+                        )}
+                        {task.status === 'completed' && !selectable && (
+                          <p className="mt-2 text-xs text-gray-400">当前批量下载类型下无可用输出文件</p>
                         )}
 
                         {task.status === 'running' && (
